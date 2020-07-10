@@ -143,8 +143,8 @@ public:
 
 		// Advertize topics
 		if (odom_mode != OM::NONE) {
-			// if (twist_send) twist_pub = wo_nh.advertise<geometry_msgs::TwistWithCovarianceStamped>("velocity", 10);
-			// else odom_pub = wo_nh.advertise<nav_msgs::Odometry>("odom", 10);
+			if (twist_send) twist_pub = wo_nh.advertise<geometry_msgs::TwistWithCovarianceStamped>("velocity", 10);
+			else odom_pub = wo_nh.advertise<nav_msgs::Odometry>("odom", 10);
 		}
 		// No-odometry warning
 		else ROS_WARN_NAMED("wo", "WO: No odometry computations will be performed.");
@@ -568,7 +568,7 @@ private:
 			// wheel_enc_msg->positions.resize(2);
 			// wheel_enc_msg->pps.resize(2);
 			// wheel_enc_msg->ppr.resize(2);
-			std::copy_n(wheel_enc.position.begin(), 4, wheel_enc_msg->positions.begin());
+			std::copy_n(wheel_enc.position.begin(), 4, wheel_enc_msg->encoder_position.begin());
 			std::copy_n(wheel_enc.qpps.begin(), 4, wheel_enc_msg->qpps.begin());
 			std::copy_n(wheel_enc.distance.begin(), 4, wheel_enc_msg->distance_traveled.begin());
 			std::copy_n(wheel_enc.velocity.begin(), 4, wheel_enc_msg->wheel_velocity.begin());
@@ -580,7 +580,7 @@ private:
 		// Process measurement
 		if (odom_mode == OM::DIST) {
 			std::vector<double> measurement(4);
-			std::copy_n(wheel_dist.distance.begin(), 4, measurement.begin());
+			std::copy_n(wheel_enc.distance.begin(), 4, measurement.begin());
 			process_measurement(measurement, false, timestamp_int, timestamp);
 		}
 	}
