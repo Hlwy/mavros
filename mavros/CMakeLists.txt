@@ -23,6 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_eigen
   tf2_ros
   trajectory_msgs
+  rospy
 )
 
 ## System dependencies are found with CMake's conventions

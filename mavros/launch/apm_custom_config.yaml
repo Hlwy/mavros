@@ -1,0 +1,201 @@
+# Common configuration for APM2 autopilot
+#
+# node:
+startup_px4_usb_quirk: true
+
+# --- system plugins ---
+
+# sys_status & sys_time connection options
+conn:
+  heartbeat_rate: 1.0    # send hertbeat rate in Hertz
+  timeout: 10.0          # hertbeat timeout in seconds
+  timesync_rate: 10.0     # TIMESYNC rate in Hertz (feature disabled if 0.0)
+  system_time_rate: 1.0  # send system time to FCU rate in Hertz (disabled if 0.0)
+
+# sys_status
+sys:
+  min_voltage: 10.0   # diagnostics min voltage
+  disable_diag: false # disable all sys_status diagnostics, except heartbeat
+
+# sys_time
+time:
+  time_ref_source: "fcu"  # time_reference source
+  timesync_mode: MAVLINK
+  timesync_avg_alpha: 0.6 # timesync averaging factor
+
+# actuator_control
+# None
+
+# command
+cmd:
+  use_comp_id_system_control: false # quirk for some old FCUs
+
+# global_position
+global_position:
+  frame_id: "map"             # origin frame   default "map"
+  child_frame_id: "base_link" # body-fixed frame
+  rot_covariance: 99999.0   # covariance for attitude?
+  gps_uere: 1.0             # User Equivalent Range Error (UERE) of GPS sensor (m)
+  use_relative_alt: true    # use relative altitude for local coordinates
+  tf:
+    send: false               # send TF?  default false
+    frame_id: "map"  # TF frame_id   default "odom"
+    global_frame_id: "earth"  # TF earth frame_id
+    child_frame_id: "base_link" # TF child_frame_id
+
+# imu_pub
+imu:
+  frame_id: "base_link"
+  # need find actual values
+  linear_acceleration_stdev: 0.0003
+  angular_velocity_stdev: !degrees 0.02
+  orientation_stdev: 1.0
+  magnetic_stdev: 0.0
+
+# local_position
+local_position:
+  frame_id: "odom" # default "map"
+  tf:
+    send: true    # default false
+    frame_id: "odom"    # default "map"
+    child_frame_id: "base_link"
+    send_fcu: false   # default false
+
+# param
+# None, used for FCU params
+
+# setpoint_position
+setpoint_position:
+  tf:
+    listen: false           # enable tf listener (disable topic subscribers)
+    frame_id: "map"
+    child_frame_id: "target_position"
+    rate_limit: 50.0
+  mav_frame: LOCAL_NED
+
+# setpoint_velocity
+setpoint_velocity:
+  mav_frame: LOCAL_NED
+  # mav_frame: BODY_NED
+
+#mav_frame: BODY_FLU
+
+# --- mavros extras plugins (same order) ---
+
+# distance_sensor
+## Currently available orientations:
+#    Check http://wiki.ros.org/mavros/Enumerations
+##
+distance_sensor:
+  rangefinder_sub:
+    subscriber: true
+    id: 0
+    orientation: PITCH_270  # only that orientation are supported by APM 3.4+
+
+# fake_gps
+fake_gps:
+  # select data source
+  use_mocap: false         # ~mocap/pose
+  mocap_transform: false   # ~mocap/tf instead of pose
+  use_vision: true       # ~vision (pose)
+  # origin (default: Zürich)
+  geo_origin:
+    lat: 47.3667          # latitude [degrees]
+    lon: 8.5500           # longitude [degrees]
+    alt: 0.0            # altitude (height over the WGS-84 ellipsoid) [meters]
+  eph: 2.0
+  epv: 2.0
+  satellites_visible: 5   # virtual number of visible satellites
+  fix_type: 3             # type of GPS fix (default: 3D)
+  tf:
+    listen: false
+    send: false           # send TF?
+    frame_id: "map"       # TF frame_id
+    child_frame_id: "fix" # TF child_frame_id
+    rate_limit: 10.0      # TF rate
+  gps_rate: 5.0           # GPS data publishing rate
+
+## odom
+# estimator_type:
+# 0	MAV_ESTIMATOR_TYPE_UNKNOWN       Unknown type of the estimator.
+# 1	MAV_ESTIMATOR_TYPE_NAIVE         This is a naive estimator without any real covariance feedback.
+# 2	MAV_ESTIMATOR_TYPE_VISION        Computer vision based estimate. Might be up to scale.
+# 3	MAV_ESTIMATOR_TYPE_VIO           Visual-inertial estimate.
+# 4	MAV_ESTIMATOR_TYPE_GPS           Plain GPS estimate.
+# 5	MAV_ESTIMATOR_TYPE_GPS_INS       Estimator integrating GPS and inertial sensing.
+# 6	MAV_ESTIMATOR_TYPE_MOCAP         Estimate from external motion capturing system.
+# 7	MAV_ESTIMATOR_TYPE_LIDAR         Estimator based on lidar sensor input.
+# 8	MAV_ESTIMATOR_TYPE_AUTOPILOT     Estimator on autopilot.
+# odometry:
+#   frame_tf:
+#     local_frame: "ned"
+#     body_frame_orientation: "frd"
+#   estimator_type: 8
+
+odometry:
+  fcu:
+    odom_parent_id_des: "map"    # desired parent frame rotation of the FCU's odometry
+    odom_child_id_des: "base_link"
+
+# vision_pose_estimate
+vision_pose:
+  tf:
+    listen: false           # enable tf listener (disable topic subscribers)
+    frame_id: "map"
+    child_frame_id: "vision_estimate"
+    rate_limit: 10.0
+
+# vision_speed_estimate
+vision_speed:
+  listen_twist: true    # enable listen to twist topic, else listen to vec3d topic
+  twist_cov: true       # enable listen to twist with covariance topic
+
+# vibration
+vibration:
+  frame_id: "base_link"
+
+# wheel_odometry
+# wheel_odometry:
+#   count: 2           # number of wheels to compute odometry
+#   use_rpm: true     # use wheel's RPM instead of cumulative distance to compute odometry
+#   wheel0: {x: -0.18, y:  0.215, radius: 0.09525} # x-, y-offset (m,NED) and radius (m)
+#   wheel1: {x: -0.18, y:  -0.215, radius: 0.09525} # x-, y-offset (m,NED) and radius (m)
+#   send_raw: true              # NOTE WAS SET TO FALSE. send wheel's RPM and cumulative distance (~/wheel_odometry/rpm, ~/wheel_odometry/distance)
+#   send_twist: false           # send geometry_msgs/TwistWithCovarianceStamped instead of nav_msgs/Odometry
+#   frame_id: "odom"             # origin frame
+#   child_frame_id: "base_link" # body-fixed frame
+#   vel_error: 1.0              # wheel velocity measurement error 1-std (m/s)
+#   tf:
+#     send: false # Was set to false
+#     frame_id: "odom"
+#     child_frame_id: "base_link"
+#
+# wheel_encoders:
+#   count: 2           # number of wheels to compute odometry
+#   use_rpm: true     # use wheel's RPM instead of cumulative distance to compute odometry
+#   wheel0: {x: -0.18, y:  0.215, radius: 0.09525} # x-, y-offset (m,NED) and radius (m)
+#   wheel1: {x: -0.18, y:  -0.215, radius: 0.09525} # x-, y-offset (m,NED) and radius (m)
+#   send_raw: true              # NOTE WAS SET TO FALSE. send wheel's RPM and cumulative distance (~/wheel_odometry/rpm, ~/wheel_odometry/distance)
+#   send_twist: false           # send geometry_msgs/TwistWithCovarianceStamped instead of nav_msgs/Odometry
+#   frame_id: "odom"             # origin frame
+#   child_frame_id: "base_link" # body-fixed frame
+#   vel_error: 1.0              # wheel velocity measurement error 1-std (m/s)
+#   tf:
+#     send: false # Was set to false
+#     frame_id: "odom"
+#     child_frame_id: "base_link"
+
+wheel_encoders_data:
+  count: 2           # number of wheels to compute odometry
+  use_rpm: true     # use wheel's RPM instead of cumulative distance to compute odometry
+  wheel0: {x: -0.18, y:  0.215, radius: 0.09525} # x-, y-offset (m,NED) and radius (m)
+  wheel1: {x: -0.18, y:  -0.215, radius: 0.09525} # x-, y-offset (m,NED) and radius (m)
+  send_raw: true              # NOTE WAS SET TO FALSE. send wheel's RPM and cumulative distance (~/wheel_odometry/rpm, ~/wheel_odometry/distance)
+  send_twist: false           # send geometry_msgs/TwistWithCovarianceStamped instead of nav_msgs/Odometry
+  frame_id: "odom"             # origin frame
+  child_frame_id: "base_link" # body-fixed frame
+  vel_error: 1.0              # wheel velocity measurement error 1-std (m/s)
+  tf:
+    send: false # Was set to false
+    frame_id: "odom"
+    child_frame_id: "base_link"

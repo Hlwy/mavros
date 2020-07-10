@@ -29,6 +29,7 @@
   <depend>urdf</depend>
   <depend>tf</depend>
   <depend>tf2_eigen</depend>
+  <depend>mavlink</depend>
 
   <export>
     <mavros plugin="${prefix}/mavros_plugins.xml" />

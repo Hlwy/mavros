@@ -55,6 +55,8 @@ add_message_files(
   WaypointList.msg
   WaypointReached.msg
   WheelOdomStamped.msg
+  WheelEncodersStamped.msg
+  WheelEncodersDataStamped.msg
 )
 
 add_service_files(

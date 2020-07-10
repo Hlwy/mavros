@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_eigen
   urdf
   visualization_msgs
+  mavlink
 )
 
 ## System dependencies are found with CMake's conventions
@@ -51,7 +52,7 @@ include(MavrosMavlink)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES
-  CATKIN_DEPENDS geometry_msgs mavros mavros_msgs roscpp sensor_msgs std_msgs visualization_msgs
+CATKIN_DEPENDS geometry_msgs mavros mavros_msgs roscpp sensor_msgs std_msgs visualization_msgs
   DEPENDS Boost
 )
 
@@ -85,6 +86,8 @@ add_library(mavros_extras
   src/plugins/vision_pose_estimate.cpp
   src/plugins/vision_speed_estimate.cpp
   src/plugins/wheel_odometry.cpp
+  src/plugins/wheel_encoders.cpp
+  src/plugins/wheel_encoders_data.cpp
   src/plugins/mount_control.cpp
 )
 add_dependencies(mavros_extras

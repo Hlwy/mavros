@@ -50,6 +50,12 @@
 	<class name="wheel_odometry" type="mavros::extra_plugins::WheelOdometryPlugin" base_class_type="mavros::plugin::PluginBase">
 		<description>Compute and publish wheel odometry coming from FCU sensors.</description>
 	</class>
+	<class name="wheel_encoders" type="mavros::extra_plugins::WheelEncodersPlugin" base_class_type="mavros::plugin::PluginBase">
+		<description>Compute and publish wheel odometry coming from FCU sensors.</description>
+	</class>
+	<class name="wheel_encoders_data" type="mavros::extra_plugins::WheelEncodersDataPlugin" base_class_type="mavros::plugin::PluginBase">
+		<description>Compute and publish wheel odometry coming from FCU sensors.</description>
+	</class>
 	<class name="vibration" type="mavros::extra_plugins::VibrationPlugin" base_class_type="mavros::plugin::PluginBase">
 		<description>Publish VIBRATION message data from FCU.</description>
 	</class>

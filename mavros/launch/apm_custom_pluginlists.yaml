@@ -1,0 +1,42 @@
+plugin_blacklist:
+# common
+- ftp
+- safety_area
+- hil
+- 3dr_radio
+- rc_io
+- setpoint_accel
+- setpoint_position
+- setpoint_attitude
+- vfr_hud
+- waypoint
+- landing_target
+- log_transfer
+- mount_control
+- rangefinder
+- setpoint_trajectory
+- trajectory
+- wind_estimation
+# extras
+- altitude
+- debug_value
+- image_pub
+- px4flow
+- vibration
+- mocap_pose_estimate
+- cam_imu_sync
+plugin_whitelist:
+- fake_gps
+- actuator_control
+- setpoint_raw
+- manual_control
+- imu
+- global_position
+- vision*
+- sys_time
+- local_position
+- distance_sensor
+# - wheel_odometry
+# - wheel_encoders
+- wheel_encoders_data
+- odom
