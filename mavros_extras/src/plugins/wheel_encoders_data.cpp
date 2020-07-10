@@ -209,91 +209,91 @@ private:
 	 */
 	void publish_odometry(ros::Time time)
 	{
-		// // Get initial yaw (from IMU)
-		// // Check that IMU was already initialized
-		// if (!yaw_initialized && m_uas->get_attitude_imu_enu()) {
-		// 	double yaw = ftf::quaternion_get_yaw(ftf::to_eigen(m_uas->get_attitude_orientation_enu()));
-		//
-		// 	// Rotate current pose by initial yaw
-		// 	Eigen::Rotation2Dd rot(yaw);
-		// 	rpose.head(2) = rot * rpose.head(2); // x,y
-		// 	rpose(2) += yaw; // yaw
-		//
-		// 	ROS_INFO_NAMED("wo", "WO: Initial yaw (deg): %f", yaw/M_PI*180.0);
-		// 	yaw_initialized = true;
-		// }
-		//
-		// // Orientation (only if we have initial yaw)
-		// geometry_msgs::Quaternion quat;
-		// if (yaw_initialized)
-		// 	quat = tf2::toMsg(ftf::quaternion_from_rpy(0.0, 0.0, rpose(2)));
-		//
-		// // Twist
-		// geometry_msgs::TwistWithCovariance twist_cov;
-		// // linear
-		// twist_cov.twist.linear.x = rtwist(0);
-		// twist_cov.twist.linear.y = rtwist(1);
-		// twist_cov.twist.linear.z = 0.0;
-		// // angular
-		// twist_cov.twist.angular.x = 0.0;
-		// twist_cov.twist.angular.y = 0.0;
-		// twist_cov.twist.angular.z = rtwist(2);
-		// // covariance
-		// ftf::EigenMapCovariance6d twist_cov_map(twist_cov.covariance.data());
-		// twist_cov_map.setZero();
-		// twist_cov_map.block<2, 2>(0, 0).diagonal() << rtwist_cov(0), rtwist_cov(1);
-		// twist_cov_map.block<1, 1>(5, 5).diagonal() << rtwist_cov(2);
-		//
-		// // Publish twist
-		// if (twist_send) {
-		// 	auto twist_cov_t = boost::make_shared<geometry_msgs::TwistWithCovarianceStamped>();
-		// 	// header
-		// 	twist_cov_t->header.stamp = time;
-		// 	twist_cov_t->header.frame_id = frame_id;
-		// 	// twist
-		// 	twist_cov_t->twist = twist_cov;
-		// 	// publish
-		// 	twist_pub.publish(twist_cov_t);
-		// }
-		// // Publish odometry (only if we have initial yaw)
-		// else if (yaw_initialized) {
-		// 	auto odom = boost::make_shared<nav_msgs::Odometry>();
-		// 	// header
-		// 	odom->header.stamp = time;
-		// 	odom->header.frame_id = frame_id;
-		// 	odom->child_frame_id = child_frame_id;
-		// 	// pose
-		// 	odom->pose.pose.position.x = rpose(0);
-		// 	odom->pose.pose.position.y = rpose(1);
-		// 	odom->pose.pose.position.z = 0.0;
-		// 	odom->pose.pose.orientation = quat;
-		// 	ftf::EigenMapCovariance6d pose_cov_map(odom->pose.covariance.data());
-		// 	pose_cov_map.block<2, 2>(0, 0) << rpose_cov.block<2, 2>(0, 0);
-		// 	pose_cov_map.block<2, 1>(0, 5) << rpose_cov.block<2, 1>(0, 2);
-		// 	pose_cov_map.block<1, 2>(5, 0) << rpose_cov.block<1, 2>(2, 0);
-		// 	pose_cov_map.block<1, 1>(5, 5) << rpose_cov.block<1, 1>(2, 2);
-		// 	// twist
-		// 	odom->twist = twist_cov;
-		// 	// publish
-		// 	odom_pub.publish(odom);
-		// }
-		//
-		// // Publish TF (only if we have initial yaw)
-		// if (tf_send && yaw_initialized) {
-		// 	geometry_msgs::TransformStamped transform;
-		// 	// header
-		// 	transform.header.stamp = time;
-		// 	transform.header.frame_id = tf_frame_id;
-		// 	transform.child_frame_id = tf_child_frame_id;
-		// 	// translation
-		// 	transform.transform.translation.x = rpose(0);
-		// 	transform.transform.translation.y = rpose(1);
-		// 	transform.transform.translation.z = 0.0;
-		// 	// rotation
-		// 	transform.transform.rotation = quat;
-		// 	// publish
-		// 	m_uas->tf2_broadcaster.sendTransform(transform);
-		// }
+		// Get initial yaw (from IMU)
+		// Check that IMU was already initialized
+		if (!yaw_initialized && m_uas->get_attitude_imu_enu()) {
+			double yaw = ftf::quaternion_get_yaw(ftf::to_eigen(m_uas->get_attitude_orientation_enu()));
+
+			// Rotate current pose by initial yaw
+			Eigen::Rotation2Dd rot(yaw);
+			rpose.head(2) = rot * rpose.head(2); // x,y
+			rpose(2) += yaw; // yaw
+
+			ROS_INFO_NAMED("wo", "WO: Initial yaw (deg): %f", yaw/M_PI*180.0);
+			yaw_initialized = true;
+		}
+
+		// Orientation (only if we have initial yaw)
+		geometry_msgs::Quaternion quat;
+		if (yaw_initialized)
+			quat = tf2::toMsg(ftf::quaternion_from_rpy(0.0, 0.0, rpose(2)));
+
+		// Twist
+		geometry_msgs::TwistWithCovariance twist_cov;
+		// linear
+		twist_cov.twist.linear.x = rtwist(0);
+		twist_cov.twist.linear.y = rtwist(1);
+		twist_cov.twist.linear.z = 0.0;
+		// angular
+		twist_cov.twist.angular.x = 0.0;
+		twist_cov.twist.angular.y = 0.0;
+		twist_cov.twist.angular.z = rtwist(2);
+		// covariance
+		ftf::EigenMapCovariance6d twist_cov_map(twist_cov.covariance.data());
+		twist_cov_map.setZero();
+		twist_cov_map.block<2, 2>(0, 0).diagonal() << rtwist_cov(0), rtwist_cov(1);
+		twist_cov_map.block<1, 1>(5, 5).diagonal() << rtwist_cov(2);
+
+		// Publish twist
+		if (twist_send) {
+			auto twist_cov_t = boost::make_shared<geometry_msgs::TwistWithCovarianceStamped>();
+			// header
+			twist_cov_t->header.stamp = time;
+			twist_cov_t->header.frame_id = frame_id;
+			// twist
+			twist_cov_t->twist = twist_cov;
+			// publish
+			twist_pub.publish(twist_cov_t);
+		}
+		// Publish odometry (only if we have initial yaw)
+		else if (yaw_initialized) {
+			auto odom = boost::make_shared<nav_msgs::Odometry>();
+			// header
+			odom->header.stamp = time;
+			odom->header.frame_id = frame_id;
+			odom->child_frame_id = child_frame_id;
+			// pose
+			odom->pose.pose.position.x = rpose(0);
+			odom->pose.pose.position.y = rpose(1);
+			odom->pose.pose.position.z = 0.0;
+			odom->pose.pose.orientation = quat;
+			ftf::EigenMapCovariance6d pose_cov_map(odom->pose.covariance.data());
+			pose_cov_map.block<2, 2>(0, 0) << rpose_cov.block<2, 2>(0, 0);
+			pose_cov_map.block<2, 1>(0, 5) << rpose_cov.block<2, 1>(0, 2);
+			pose_cov_map.block<1, 2>(5, 0) << rpose_cov.block<1, 2>(2, 0);
+			pose_cov_map.block<1, 1>(5, 5) << rpose_cov.block<1, 1>(2, 2);
+			// twist
+			odom->twist = twist_cov;
+			// publish
+			odom_pub.publish(odom);
+		}
+
+		// Publish TF (only if we have initial yaw)
+		if (tf_send && yaw_initialized) {
+			geometry_msgs::TransformStamped transform;
+			// header
+			transform.header.stamp = time;
+			transform.header.frame_id = tf_frame_id;
+			transform.child_frame_id = tf_child_frame_id;
+			// translation
+			transform.transform.translation.x = rpose(0);
+			transform.transform.translation.y = rpose(1);
+			transform.transform.translation.z = 0.0;
+			// rotation
+			transform.transform.rotation = quat;
+			// publish
+			m_uas->tf2_broadcaster.sendTransform(transform);
+		}
 	}
 
 	/**
@@ -504,7 +504,7 @@ private:
 				distance[1] = distance[0];
 
 			// Update odometry
-			// update_odometry(distance, dt);
+			update_odometry(distance, dt);
 
 			// Publish odometry
 			// publish_odometry(time_pub);
@@ -568,19 +568,21 @@ private:
 			// wheel_enc_msg->positions.resize(2);
 			// wheel_enc_msg->pps.resize(2);
 			// wheel_enc_msg->ppr.resize(2);
-			std::copy_n(wheel_enc.position.begin(), 2, wheel_enc_msg->positions.begin());
-			std::copy_n(wheel_enc.qpps.begin(), 2, wheel_enc_msg->pps.begin());
-			std::copy_n(wheel_enc.pulses_per_meter.begin(), 2, wheel_enc_msg->ppr.begin());
+			std::copy_n(wheel_enc.position.begin(), 4, wheel_enc_msg->positions.begin());
+			std::copy_n(wheel_enc.qpps.begin(), 4, wheel_enc_msg->qpps.begin());
+			std::copy_n(wheel_enc.distance.begin(), 4, wheel_enc_msg->distance_traveled.begin());
+			std::copy_n(wheel_enc.velocity.begin(), 4, wheel_enc_msg->wheel_velocity.begin());
+			// std::copy_n(wheel_enc.pulses_per_meter.begin(), 4, wheel_enc_msg->ppr.begin());
 
 			enc_pub.publish(wheel_enc_msg);
 		}
 
 		// Process measurement
-		// if (odom_mode == OM::DIST) {
-		// 	std::vector<double> measurement(wheel_dist.count);
-		// 	std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, measurement.begin());
-		// 	process_measurement(measurement, false, timestamp_int, timestamp);
-		// }
+		if (odom_mode == OM::DIST) {
+			std::vector<double> measurement(4);
+			std::copy_n(wheel_dist.distance.begin(), 4, measurement.begin());
+			process_measurement(measurement, false, timestamp_int, timestamp);
+		}
 	}
 	void handle_wheel_distance(const mavlink::mavlink_message_t *msg, mavlink::common::msg::WHEEL_DISTANCE &wheel_dist)
 	{

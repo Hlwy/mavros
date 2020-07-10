@@ -3,6 +3,7 @@
 # For streaming timestamped data from FCU wheel encoders (RPM or WHEEL_DISTANCE).
 
 std_msgs/Header header
-int64[4] positions
-int64[4] pps
-int64[4] ppr
+int64[4] encoder_position
+int64[4] qpps
+float[4] distance_traveled
+float[4] wheel_velocity
