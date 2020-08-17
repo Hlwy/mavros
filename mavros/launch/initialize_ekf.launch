@@ -1,9 +1,13 @@
 <launch>
-     <arg name="lat" default="35.518404"/>
-     <arg name="lon" default="-97.766172"/>
+     <arg name="lat" default="35.5030528"/>
+     <arg name="lon" default="-97.7074887"/>
 
-     <node pkg="mavros" type="initialize_ekf.py" respawn="false" name="ekf_start" output="screen" clear_params="true">
+     <node pkg="mavros" type="set_origin.py" respawn="false" name="ekf_start" output="screen" clear_params="true">
           <param name="fallback_latitude"       type="double" value="$(arg lat)" />
           <param name="fallback_longitude"      type="double" value="$(arg lon)"/>
      </node>
+     <!-- <node pkg="mavros" type="initialize_ekf.py" respawn="false" name="ekf_start" output="screen" clear_params="true">
+          <param name="fallback_latitude"       type="double" value="$(arg lat)" />
+          <param name="fallback_longitude"      type="double" value="$(arg lon)"/>
+     </node> -->
 </launch>

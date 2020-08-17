@@ -46,6 +46,7 @@ public:
 		fp_nh("~fake_gps"),
 		gps_rate(5.0),
 		use_mocap(true),
+		flag_throttle(true),
 		map_origin(0.0, 0.0, 0.0),
 		mocap_transform(true),
 		use_vision(false),
@@ -99,10 +100,11 @@ public:
 		}
 
 		// source set params
-		fp_nh.param("use_mocap", use_mocap, true);		// listen to MoCap source
-		fp_nh.param("mocap_transform", mocap_transform, true);	// listen to MoCap source (TransformStamped if true; PoseStamped if false)
+		fp_nh.param("use_mocap", use_mocap, false);		// listen to MoCap source
+		fp_nh.param("throttle_gps", flag_throttle, false);		// listen to MoCap source
+		fp_nh.param("mocap_transform", mocap_transform, false);	// listen to MoCap source (TransformStamped if true; PoseStamped if false)
 		fp_nh.param("tf/listen", tf_listen, false);		// listen to TF source
-		fp_nh.param("use_vision", use_vision, false);		// listen to Vision source
+		fp_nh.param("use_vision", use_vision, true);		// listen to Vision source
 
 		// tf params
 		fp_nh.param<std::string>("tf/frame_id", tf_frame_id, "map");
@@ -149,6 +151,7 @@ private:
 	ros::Subscriber mocap_pose_sub;
 	ros::Subscriber vision_pose_sub;
 
+	bool flag_throttle;
 	bool use_mocap;			//!< set use of mocap data (PoseStamped msg)
 	bool use_vision;		//!< set use of vision data
 	bool mocap_transform;		//!< set use of mocap data (TransformStamped msg)
@@ -175,8 +178,14 @@ private:
 	 */
 	void send_fake_gps(const ros::Time &stamp, const Eigen::Vector3d &ecef_offset) {
 		// Throttle incoming messages to 5hz
-		if ((ros::Time::now() - last_pos_time) < ros::Duration(gps_rate)) {
-			return;
+		ros::Time now = ros::Time::now();
+		if ((now - last_pos_time) < ros::Duration(gps_rate)) {
+			if(flag_throttle){
+				ROS_DEBUG_STREAM("FGPS: GPS Measurement Rate of " << ros::Duration(now - last_pos_time) << " < " << ros::Duration(gps_rate) << " expected. Skipping..." << std::endl);
+				return;
+			} else{
+				ROS_DEBUG_STREAM("FGPS: GPS Measurement Rate of " << ros::Duration(now - last_pos_time) << " < " << ros::Duration(gps_rate) << " expected. Using..." << std::endl);
+			}
 		}
 		last_pos_time = ros::Time::now();
 
@@ -186,6 +195,8 @@ private:
 		 * @todo: add GPS_INPUT msg as an alternative, as Ardupilot already supports it
 		 */
 		mavlink::common::msg::HIL_GPS fix {};
+		// mavlink::common::msg::GPS_INPUT fix {};
+		// mavlink::common::msg::GPS_RAW_INT fix {};
 
 		Eigen::Vector3d geodetic;
 		Eigen::Vector3d current_ecef(ecef_origin.x() + ecef_offset.x(),
@@ -218,15 +229,16 @@ private:
 		fix.time_usec = stamp.toNSec() / 1000;	// [useconds]
 		fix.lat = geodetic.x() * 1e7;		// [degrees * 1e7]
 		fix.lon = geodetic.y() * 1e7;		// [degrees * 1e7]
-		fix.alt = (geodetic.z() + GeographicLib::Geoid::ELLIPSOIDTOGEOID *
-			  (*m_uas->egm96_5)(geodetic.x(), geodetic.y())) * 1e3;	// [meters * 1e3]
-		fix.vel = vel.block<2, 1>(0, 0).norm();	// [cm/s]
+		fix.alt = (geodetic.z() + GeographicLib::Geoid::ELLIPSOIDTOGEOID * (*m_uas->egm96_5)(geodetic.x(), geodetic.y())) * 1e3;	// [meters * 1e3]
 		fix.vn = vel.x();			// [cm/s]
 		fix.ve = vel.y();			// [cm/s]
 		fix.vd = vel.z();			// [cm/s]
+		fix.vel = vel.block<2, 1>(0, 0).norm();	// [cm/s]
 		fix.cog = cog * 1e2;			// [degrees * 1e2]
 		fix.eph = eph * 1e2;			// [cm]
 		fix.epv = epv * 1e2;			// [cm]
+		// fix.hdop = eph;			// [m]
+		// fix.vdop = epv;			// [m]
 		fix.fix_type = utils::enum_value(fix_type);;
 		fix.satellites_visible = satellites_visible;
 
@@ -236,6 +248,72 @@ private:
 
 		UAS_FCU(m_uas)->send_message_ignore_drop(fix);
 	}
+
+	/**
+	<message id="24" name="GPS_RAW_INT">
+       <description>The global position, as returned by the Global Positioning System (GPS). This is
+                 NOT the global position estimate of the system, but rather a RAW sensor value. See message GLOBAL_POSITION for the global position estimate.</description>
+       <field type="uint64_t" name="time_usec" units="us">Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number.</field>
+       <field type="uint8_t" name="fix_type" enum="GPS_FIX_TYPE">GPS fix type.</field>
+       <field type="int32_t" name="lat" units="degE7">Latitude (WGS84, EGM96 ellipsoid)</field>
+       <field type="int32_t" name="lon" units="degE7">Longitude (WGS84, EGM96 ellipsoid)</field>
+       <field type="int32_t" name="alt" units="mm">Altitude (MSL). Positive for up. Note that virtually all GPS modules provide the MSL altitude in addition to the WGS84 altitude.</field>
+       <field type="uint16_t" name="eph">GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX</field>
+       <field type="uint16_t" name="epv">GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX</field>
+       <field type="uint16_t" name="vel" units="cm/s">GPS ground speed. If unknown, set to: UINT16_MAX</field>
+       <field type="uint16_t" name="cog" units="cdeg">Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: UINT16_MAX</field>
+       <field type="uint8_t" name="satellites_visible">Number of satellites visible. If unknown, set to 255</field>
+       <extensions/>
+       <field type="int32_t" name="alt_ellipsoid" units="mm">Altitude (above WGS84, EGM96 ellipsoid). Positive for up.</field>
+       <field type="uint32_t" name="h_acc" units="mm">Position uncertainty.</field>
+       <field type="uint32_t" name="v_acc" units="mm">Altitude uncertainty.</field>
+       <field type="uint32_t" name="vel_acc" units="mm">Speed uncertainty.</field>
+       <field type="uint32_t" name="hdg_acc" units="degE5">Heading / track uncertainty</field>
+       <field type="uint16_t" name="yaw" units="cdeg">Yaw in earth frame from north. Use 0 if this GPS does not provide yaw. Use 65535 if this GPS is configured to provide yaw and is currently unable to provide it. Use 36000 for north.</field>
+     </message>
+	<message id="113" name="HIL_GPS">
+       <description>The global position, as returned by the Global Positioning System (GPS). This is
+                  NOT the global position estimate of the sytem, but rather a RAW sensor value. See message GLOBAL_POSITION for the global position estimate.</description>
+       <field type="uint64_t" name="time_usec" units="us">Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number.</field>
+       <field type="uint8_t" name="fix_type">0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix.</field>
+       <field type="int32_t" name="lat" units="degE7">Latitude (WGS84)</field>
+       <field type="int32_t" name="lon" units="degE7">Longitude (WGS84)</field>
+       <field type="int32_t" name="alt" units="mm">Altitude (MSL). Positive for up.</field>
+       <field type="uint16_t" name="eph" units="cm">GPS HDOP horizontal dilution of position. If unknown, set to: 65535</field>
+       <field type="uint16_t" name="epv" units="cm">GPS VDOP vertical dilution of position. If unknown, set to: 65535</field>
+       <field type="uint16_t" name="vel" units="cm/s">GPS ground speed. If unknown, set to: 65535</field>
+       <field type="int16_t" name="vn" units="cm/s">GPS velocity in north direction in earth-fixed NED frame</field>
+       <field type="int16_t" name="ve" units="cm/s">GPS velocity in east direction in earth-fixed NED frame</field>
+       <field type="int16_t" name="vd" units="cm/s">GPS velocity in down direction in earth-fixed NED frame</field>
+       <field type="uint16_t" name="cog" units="cdeg">Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees. If unknown, set to: 65535</field>
+       <field type="uint8_t" name="satellites_visible">Number of satellites visible. If unknown, set to 255</field>
+       <extensions/>
+       <field type="uint8_t" name="id">GPS ID (zero indexed). Used for multiple GPS inputs</field>
+     </message>
+	<message id="232" name="GPS_INPUT">
+       <description>GPS sensor input message.  This is a raw sensor value sent by the GPS. This is NOT the global position estimate of the system.</description>
+       <field type="uint64_t" name="time_usec" units="us">Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number.</field>
+       <field type="uint8_t" name="gps_id">ID of the GPS for multiple GPS inputs</field>
+       <field type="uint16_t" name="ignore_flags" enum="GPS_INPUT_IGNORE_FLAGS" display="bitmask">Bitmap indicating which GPS input flags fields to ignore.  All other fields must be provided.</field>
+       <field type="uint32_t" name="time_week_ms" units="ms">GPS time (from start of GPS week)</field>
+       <field type="uint16_t" name="time_week">GPS week number</field>
+       <field type="uint8_t" name="fix_type">0-1: no fix, 2: 2D fix, 3: 3D fix. 4: 3D with DGPS. 5: 3D with RTK</field>
+       <field type="int32_t" name="lat" units="degE7">Latitude (WGS84)</field>
+       <field type="int32_t" name="lon" units="degE7">Longitude (WGS84)</field>
+       <field type="float" name="alt" units="m">Altitude (MSL). Positive for up.</field>
+       <field type="float" name="hdop" units="m">GPS HDOP horizontal dilution of position</field>
+       <field type="float" name="vdop" units="m">GPS VDOP vertical dilution of position</field>
+       <field type="float" name="vn" units="m/s">GPS velocity in north direction in earth-fixed NED frame</field>
+       <field type="float" name="ve" units="m/s">GPS velocity in east direction in earth-fixed NED frame</field>
+       <field type="float" name="vd" units="m/s">GPS velocity in down direction in earth-fixed NED frame</field>
+       <field type="float" name="speed_accuracy" units="m/s">GPS speed accuracy</field>
+       <field type="float" name="horiz_accuracy" units="m">GPS horizontal accuracy</field>
+       <field type="float" name="vert_accuracy" units="m">GPS vertical accuracy</field>
+       <field type="uint8_t" name="satellites_visible">Number of satellites visible.</field>
+       <extensions/>
+       <field type="uint16_t" name="yaw" units="cdeg">Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north</field>
+     </message>
+	*/
 
 	/* -*- callbacks -*- */
 	void mocap_tf_cb(const geometry_msgs::TransformStamped::ConstPtr &trans)
@@ -258,7 +336,7 @@ private:
 	{
 		Eigen::Affine3d pos_enu;
 		tf::poseMsgToEigen(req->pose, pos_enu);
-
+		// ROS_DEBUG_STREAM("fake_gps: " << pos_enu.translation() << std::endl);
 		send_fake_gps(req->header.stamp, ftf::transform_frame_enu_ecef(Eigen::Vector3d(pos_enu.translation()), map_origin));
 	}
 

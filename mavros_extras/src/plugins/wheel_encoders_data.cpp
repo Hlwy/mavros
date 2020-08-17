@@ -46,8 +46,11 @@ public:
 		twist_send(false),
 		tf_send(false),
 		yaw_initialized(false),
+		flow_initialized(false),
 		rpose(Eigen::Vector3d::Zero()),
 		rtwist(Eigen::Vector3d::Zero()),
+		flowpose(Eigen::Vector3d::Zero()),
+		flowtwist(Eigen::Vector3d::Zero()),
 		rpose_cov(Eigen::Matrix3d::Zero()),
 		rtwist_cov(Eigen::Vector3d::Zero())
 	{ }
@@ -58,6 +61,7 @@ public:
 
 		// General params
 		wo_nh.param("send_raw", raw_send, false);
+		wo_nh.param("send_optflow", flow_send, true);
 		// Wheels configuration
 		wo_nh.param("count", count, 2);
 		count = std::max(1, count); // bound check
@@ -118,20 +122,20 @@ public:
 				double separation = std::abs(wheel_offset[1].y() - wheel_offset[0].y());
 				if (separation < 1.e-5) {
 					odom_mode = OM::NONE;
-					ROS_WARN_NAMED("wo", "WO: Separation between the first two wheels is too small (%f).", separation);
+					ROS_WARN_NAMED("wheel_encoders_data", "WO: Separation between the first two wheels is too small (%f).", separation);
 				}
 
 				// Check for reasonable radiuses
 				for (int i = 0; i < wheel_radius.size(); i++) {
 					if (wheel_radius[i] <= 1.e-5) {
 						odom_mode = OM::NONE;
-						ROS_WARN_NAMED("wo", "WO: Wheel #%i has incorrect radius (%f).", i, wheel_radius[i]);
+						ROS_WARN_NAMED("wheel_encoders_data", "WO: Wheel #%i has incorrect radius (%f).", i, wheel_radius[i]);
 					}
 				}
 			}
 			else {
 				odom_mode = OM::NONE;
-				ROS_WARN_NAMED("wo", "WO: Not all wheels have parameters specified (%lu/%i).", wheel_offset.size(), count);
+				ROS_WARN_NAMED("wheel_encoders_data", "WO: Not all wheels have parameters specified (%lu/%i).", wheel_offset.size(), count);
 			}
 		}
 
@@ -147,14 +151,14 @@ public:
 			else odom_pub = wo_nh.advertise<nav_msgs::Odometry>("odom", 10);
 		}
 		// No-odometry warning
-		else ROS_WARN_NAMED("wo", "WO: No odometry computations will be performed.");
+		else ROS_WARN_NAMED("wheel_encoders_data", "WO: No odometry computations will be performed.");
 	}
 
 	Subscriptions get_subscriptions()
 	{
 		return {
-			make_handler(&WheelEncodersDataPlugin::handle_encoders),
-			// make_handler(&WheelEncodersDataPlugin::handle_wheel_distance)
+			// make_handler(&WheelEncodersDataPlugin::handle_encoders),
+			make_handler(&WheelEncodersDataPlugin::handle_wheel_distance)
 		};
 	}
 
@@ -177,6 +181,7 @@ private:
 
 	int count;		//!< requested number of wheels to compute odometry
 	bool raw_send;		//!< send wheel's RPM and cumulative distance
+	bool flow_send;		//!< send wheel's RPM and cumulative distance
 	std::vector<Eigen::Vector2d> wheel_offset; //!< wheel x,y offsets (m,NED)
 	std::vector<double> wheel_radius; //!< wheel radiuses (m)
 
@@ -193,10 +198,15 @@ private:
 	std::vector<double> measurement_prev;	//!< previous measurement
 
 	bool yaw_initialized;			//!< initial yaw initialized (from IMU)
-
+	bool flow_initialized;			//!< initial yaw initialized (from IMU)
+	uint64_t dt_sample;
 	/// @brief Robot origin 2D-state (SI units)
 	Eigen::Vector3d rpose;		//!< pose (x, y, yaw)
 	Eigen::Vector3d rtwist;		//!< twist (vx, vy, vyaw)
+	Eigen::Vector3d flowpose;		//!< pose (x, y, yaw)
+	Eigen::Vector3d prev_flowpose;		//!< pose (x, y, yaw)
+	Eigen::Vector3d prev_flowtwist;		//!< pose (x, y, yaw)
+	Eigen::Vector3d flowtwist;		//!< twist (vx, vy, vyaw)
 	Eigen::Matrix3d rpose_cov;	//!< pose error 1-var
 	Eigen::Vector3d rtwist_cov;	//!< twist error 1-var (vx_cov, vy_cov, vyaw_cov)
 
@@ -207,7 +217,7 @@ private:
 	 * Twist info doesn't depend on initial orientation so is published from the very start.
 	 * @param time		measurement's ROS time stamp
 	 */
-	void publish_odometry(ros::Time time)
+	void publish_odometry(ros::Time time, ros::Time timeFcu)
 	{
 		// Get initial yaw (from IMU)
 		// Check that IMU was already initialized
@@ -219,7 +229,7 @@ private:
 			rpose.head(2) = rot * rpose.head(2); // x,y
 			rpose(2) += yaw; // yaw
 
-			ROS_INFO_NAMED("wo", "WO: Initial yaw (deg): %f", yaw/M_PI*180.0);
+			ROS_INFO_NAMED("wheel_encoders_data", "WO: Initial yaw (deg): %f", yaw/M_PI*180.0);
 			yaw_initialized = true;
 		}
 
@@ -293,6 +303,51 @@ private:
 			transform.transform.rotation = quat;
 			// publish
 			m_uas->tf2_broadcaster.sendTransform(transform);
+		}
+
+		if(flow_send){
+			Eigen::Vector3d dFlowpose;
+			Eigen::Vector3d dFlowtwist;
+			if(!flow_initialized){
+				dFlowpose = flowpose;
+				dFlowtwist = flowtwist;
+				flow_initialized = true;
+			} else{
+				dFlowpose = flowpose - prev_flowpose;
+				dFlowtwist = flowtwist - prev_flowtwist;
+			}
+
+			mavlink::common::msg::OPTICAL_FLOW_RAD flow_rad_msg;
+			// flow_rad_msg.time_usec = (uint64_t) time.toNSec();
+			flow_rad_msg.time_usec = (uint64_t) ((double) time.toNSec() / 1000.0f);
+			flow_rad_msg.sensor_id = 0;
+			// flow_rad_msg.integration_time_us = (timeFcu - time_prev).toNSec();
+			flow_rad_msg.integration_time_us = dt_sample;
+			// flow_rad_msg.integrated_x = dFlowpose(0);
+			// flow_rad_msg.integrated_y = dFlowpose(1);
+			flow_rad_msg.integrated_x = flowpose(0);
+			flow_rad_msg.integrated_y = flowpose(1);
+			flow_rad_msg.integrated_xgyro = 0.0f;
+			flow_rad_msg.integrated_ygyro = 0.0f;
+			flow_rad_msg.integrated_zgyro = flowtwist(2);
+			// flow_rad_msg.temperature = msg->temperature * 100.0f; // temperature in centi-degrees Celsius
+			flow_rad_msg.temperature = 0.0; // temperature in centi-degrees Celsius
+			flow_rad_msg.quality = 255;
+			// flow_rad_msg.quality = msg->quality;
+			// flow_rad_msg.time_delta_distance_us = msg->time_delta_distance_us;
+			flow_rad_msg.time_delta_distance_us = 0;
+			flow_rad_msg.distance = -1;
+			// flow_rad_msg.distance = msg->distance;
+			// ROS_DEBUG_NAMED("wheel_encoders_data", "Optical Flow (Encoders) Time, Dt, X, Y, Z, Yaw --- %d, %d, %.5f, %.5f, %.5f, %.5f",
+			// 	flow_rad_msg.time_usec, dt_sample, flowpose(0), flowpose(1), flowpose(2), flowtwist(2)
+			// );
+			ROS_DEBUG_NAMED("wheel_encoders_data", "Optical Flow (Encoders) Time, Dt, dX, dY, dYaw --- %d, %d, %.5f, %.5f, %.5f",
+				flow_rad_msg.time_usec, dt_sample, flow_rad_msg.integrated_x, flow_rad_msg.integrated_y, flow_rad_msg.integrated_zgyro
+			);
+			UAS_FCU(m_uas)->send_message_ignore_drop(flow_rad_msg);
+
+			prev_flowpose = flowpose;
+			prev_flowtwist = flowtwist;
 		}
 	}
 
@@ -371,6 +426,13 @@ private:
 		// World pose
 		rpose += R * dpose;
 		rpose(2) = fmod(rpose(2), 2.0*M_PI); // Clamp to (-2*PI, 2*PI)
+		// TODO: HUNTER
+		flowpose(0) = rpose(0);
+		flowpose(1) = rpose(1);
+		flowpose(2) = rpose(2);
+		flowtwist(0) = rtwist(0);
+		flowtwist(1) = rtwist(1);
+		flowtwist(2) = rtwist(2);
 
 		// Twist errors (constant in time)
 		if (rtwist_cov(0) == 0.0) {
@@ -474,13 +536,14 @@ private:
 		}
 		// # of wheels differs from the initial value
 		else if (measurement.size() != count_meas) {
-			ROS_WARN_THROTTLE_NAMED(10, "wo", "WO: Number of wheels in measurement (%lu) differs from the initial value (%i).", measurement.size(), count_meas);
+			ROS_WARN_THROTTLE_NAMED(10, "wheel_encoders_data", "WO: Number of wheels in measurement (%lu) differs from the initial value (%i).", measurement.size(), count_meas);
 			return;
 		}
 		// Compute odometry
 		else {
 			double dt = (time - time_prev).toSec(); // Time since previous measurement (s)
 
+			dt_sample = (uint64_t)((double)(time - time_prev).toNSec() / 1000.0f);
 			// Distance traveled by each wheel since last measurement.
 			// Reserve for at least 2 wheels.
 			std::vector<double> distance(std::max(2, count));
@@ -507,7 +570,7 @@ private:
 			update_odometry(distance, dt);
 
 			// Publish odometry
-			// publish_odometry(time_pub);
+			publish_odometry(time_pub, time);
 		}
 
 		// Time step
@@ -586,32 +649,32 @@ private:
 	}
 	void handle_wheel_distance(const mavlink::mavlink_message_t *msg, mavlink::common::msg::WHEEL_DISTANCE &wheel_dist)
 	{
-		// // Check for bad wheels count
-		// if (wheel_dist.count == 0)
-		// 	return;
-		//
-		// // Get ROS timestamp of the message
-		// ros::Time timestamp = m_uas->synchronise_stamp(wheel_dist.time_usec);
-		// // Get internal timestamp of the message
-		// ros::Time timestamp_int = ros::Time(wheel_dist.time_usec / 1000000UL,  1000UL * (wheel_dist.time_usec % 1000000UL));
-		//
-		// // Publish distances
-		// if (raw_send) {
-		// 	auto wheel_dist_msg = boost::make_shared<mavros_msgs::WheelEncodersStamped>();
-		//
-		// 	wheel_dist_msg->header.stamp = timestamp;
-		// 	wheel_dist_msg->data.resize(wheel_dist.count);
-		// 	std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, wheel_dist_msg->data.begin());
-		//
-		// 	dist_pub.publish(wheel_dist_msg);
-		// }
-		//
-		// // Process measurement
-		// if (odom_mode == OM::DIST) {
-		// 	std::vector<double> measurement(wheel_dist.count);
-		// 	std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, measurement.begin());
-		// 	process_measurement(measurement, false, timestamp_int, timestamp);
-		// }
+		// Check for bad wheels count
+		if (wheel_dist.count == 0)
+			return;
+
+		// Get ROS timestamp of the message
+		ros::Time timestamp = m_uas->synchronise_stamp(wheel_dist.time_usec);
+		// Get internal timestamp of the message
+		ros::Time timestamp_int = ros::Time(wheel_dist.time_usec / 1000000UL,  1000UL * (wheel_dist.time_usec % 1000000UL));
+
+		// Publish distances
+		if (raw_send) {
+			// auto wheel_dist_msg = boost::make_shared<mavros_msgs::WheelEncodersDataStamped>();
+			//
+			// wheel_dist_msg->header.stamp = timestamp;
+			// wheel_dist_msg->data.resize(wheel_dist.count);
+			// std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, wheel_dist_msg->data.begin());
+			//
+			// dist_pub.publish(wheel_dist_msg);
+		}
+
+		// Process measurement
+		if (odom_mode == OM::DIST) {
+			std::vector<double> measurement(wheel_dist.count);
+			std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, measurement.begin());
+			process_measurement(measurement, false, timestamp_int, timestamp);
+		}
 	}
 };
 }	// namespace extra_plugins

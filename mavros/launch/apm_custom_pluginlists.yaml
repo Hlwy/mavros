@@ -2,7 +2,6 @@ plugin_blacklist:
 # common
 - ftp
 - safety_area
-- hil
 - 3dr_radio
 - rc_io
 - setpoint_accel
@@ -25,18 +24,20 @@ plugin_blacklist:
 - vibration
 - mocap_pose_estimate
 - cam_imu_sync
-plugin_whitelist:
+- hil
 - fake_gps
+- odom
+- odometry
+- wheel_encoders
+- wheel_odometry
+plugin_whitelist:
+- vision*
+- global_position
+- local_position
 - actuator_control
 - setpoint_raw
 - manual_control
 - imu
-- global_position
-- vision*
 - sys_time
-- local_position
 - distance_sensor
-# - wheel_odometry
-# - wheel_encoders
 - wheel_encoders_data
-- odom
