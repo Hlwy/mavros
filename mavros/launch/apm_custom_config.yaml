@@ -138,6 +138,7 @@ odometry:
 vision_pose:
   px4_tf_rotate: false
   apm_use_delta: true
+  send_pose_estimate: true
   good_health_thresh: 0.001
   bad_health_thresh: 1000.0
   default_confidence: 50.0
@@ -148,9 +149,27 @@ vision_pose:
   tf:
     listen: false           # enable tf listener (disable topic subscribers)
     send: false # a
-    frame_id: "odom"
+    frame_id: "odom_ned"
     child_frame_id: "base_link"
     rate_limit: 10.0
+
+# vision_pose_delta
+# vision_delta:
+#   px4_tf_rotate: false
+#   apm_use_delta: true
+#   good_health_thresh: 0.001
+#   bad_health_thresh: 1000.0
+#   default_confidence: 50.0
+#   offsets:
+#     roll: 0.0
+#     pitch: 0.0
+#     yaw: 0.0
+#   tf:
+#     listen: false           # enable tf listener (disable topic subscribers)
+#     send: false # a
+#     frame_id: "odom"
+#     child_frame_id: "base_link"
+#     rate_limit: 10.0
 
 # vision_speed_estimate
 vision_speed:

@@ -30,8 +30,10 @@ plugin_blacklist:
 - odometry
 - wheel_encoders
 - wheel_odometry
+- vision_pose_delta
+# - vision*
 plugin_whitelist:
-- vision*
+- vision_pose_estimate
 - global_position
 - local_position
 - actuator_control

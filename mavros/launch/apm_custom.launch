@@ -1,7 +1,8 @@
 <launch>
     <!-- vim: set ft=xml noet : -->
-    <remap from="mavros/vision_pose/pose" to="vo_pose" />
-    <arg name="fcu_url" default="/dev/serial0:921600" />
+    <!-- <remap from="mavros/vision_pose/pose" to="vo_pose" /> -->
+    <!-- <arg name="fcu_url" default="/dev/serial0:921600" /> -->
+    <arg name="fcu_url" default="/dev/ttyS0:115200" />
     <!-- <arg name="gcs_url" default="udp://10.0.1.46:9000@10.0.0.206:6000?ids=1,255,252"/> -->
     <arg name="gcs_url" default=""/>
     <arg name="tgt_system" default="1" />

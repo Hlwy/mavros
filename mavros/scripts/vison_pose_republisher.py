@@ -112,23 +112,31 @@ class mavros_vision_pose_republisher:
         self.pose_output_type = rospy.get_param('~output_type', 1)
         self.flag_use_pose_offsets = rospy.get_param('~use_pose_offsets', False)
         default_topic_out = rospy.get_param('~output_topic', "/vo_pose")
+        pose_estimate_topic = rospy.get_param('~pose_estimate_topic', "mavros/vision_pose/pose_estimate")
         pose_topic = rospy.get_param('~pose_topic', "mavros/local_position/pose")
         # default_topic_out = rospy.get_param('~output_topic', "/mavros/vision_pose/pose")
-        if(self.pose_output_type == 1): output_topic = "/mavros/vision_pose/pose_cov"
+        sec_output_topic = default_topic_out
+        if(self.pose_output_type == 1):
+            output_topic = "/mavros/vision_pose/pose_cov"
+            # sec_output_topic = "/mavros/vision_delta/pose_cov"
+            sec_output_topic = "/vision_pose/pose_estimate"
         elif(self.pose_output_type == 2):
             self.allow_msg_pub = True
             output_topic = "/mavros/fake_gps/vision"
         else: output_topic = default_topic_out
 
-        sec_output_topic = default_topic_out
-        self.sec_out_pub = rospy.Publisher(sec_output_topic, PoseStamped, queue_size=10)
 
         self.out_pub = None
         self.pose_subber = rospy.Subscriber(pose_topic, PoseStamped, self.poseCallback)
         self.in_subber = rospy.Subscriber(input_topic, Odometry, self.odomCallback)
+        self.estimate_subber = rospy.Subscriber(pose_estimate_topic, PoseWithCovarianceStamped, self.estimateCallback)
 
-        if(self.pose_output_type == 1): self.out_pub = rospy.Publisher(output_topic, PoseWithCovarianceStamped, queue_size=10)
-        else: self.out_pub = rospy.Publisher(output_topic, PoseStamped, queue_size=10)
+        if(self.pose_output_type == 1):
+            self.out_pub = rospy.Publisher(output_topic, PoseWithCovarianceStamped, queue_size=10)
+            self.sec_out_pub = rospy.Publisher(sec_output_topic, PoseWithCovarianceStamped, queue_size=10)
+        else:
+            self.out_pub = rospy.Publisher(output_topic, PoseStamped, queue_size=10)
+            # self.sec_out_pub = rospy.Publisher(sec_output_topic, PoseStamped, queue_size=10)
 
         self.r = rospy.Rate(update_rate)
         print("[INFO] mavros_vision_pose_republisher Node --- Started...")
@@ -137,6 +145,21 @@ class mavros_vision_pose_republisher:
         if(self.pose_output_type == 2): callRosService(self.rtabResetPoseId, [0.0, 0.0, 0.0, 0.0, 0.0, np.deg2rad(90.0)])
         else: callRosService(self.rtabResetId, None)
         self.RotMat = get_tf_frame_pose()
+
+    def estimateCallback(self, msg):
+        data =  msg.pose.pose
+        (x,y,z,r,p,yaw) = quat2euler(data)
+        quats = quaternion_from_euler(r, p, yaw-np.deg2rad(90.0))
+        outMsg = PoseWithCovarianceStamped()
+        outMsg.header = msg.header
+        outMsg.pose = msg.pose
+        outMsg.pose.pose.position.x = y
+        outMsg.pose.pose.position.y = -x
+        outMsg.pose.pose.orientation.x = quats[0]
+        outMsg.pose.pose.orientation.y = quats[1]
+        outMsg.pose.pose.orientation.z = quats[2]
+        outMsg.pose.pose.orientation.w = quats[3]
+        self.sec_out_pub.publish(outMsg)
 
     def poseCallback(self, msg):
         if(not self.recvd_initial_pose and self.pose_output_type != 2):
@@ -240,6 +263,7 @@ class mavros_vision_pose_republisher:
             #     outMsg.pose.orientation.w = quatsOffset[3]
 
             self.out_pub.publish(outMsg)
+            # self.sec_out_pub.publish(outMsg)
 
         else:
             outMsg = PoseStamped()

@@ -27,22 +27,22 @@ elif [[ -n "$rosMaster" ]]; then
 fi
 export ROS_MASTER_URI=$rosMaster
 
-# (source /swanson/catkin_ws/devel/setup.bash; rosservice call /rtabmap/pause_odom "{}")&
-(source /swanson/catkin_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$wlanIp:9000@10.0.0.74:6000?ids=1,255,252")&
-# (source /swanson/catkin_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$rosIp:9000@10.0.0.133:6000?ids=1,255,252")&
-# (source /swanson/catkin_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$rosIp:9000@192.168.2.4:6000?ids=1,255,252")&
-# (source /swanson/catkin_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$rosIp:9000@10.0.0.70:6000?ids=1,255,252")&
-(source /swanson/catkin_ws/devel/setup.bash; roslaunch mavros initialize_ekf.launch)&
+# (source $HOME/swanson_ws/devel/setup.bash; rosservice call /rtabmap/pause_odom "{}")&
+(source $HOME/swanson_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$wlanIp:9000@10.0.0.74:6000?ids=1,255,252")&
+# (source $HOME/swanson_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$rosIp:9000@10.0.0.133:6000?ids=1,255,252")&
+# (source $HOME/swanson_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$rosIp:9000@192.168.2.4:6000?ids=1,255,252")&
+# (source $HOME/swanson_ws/devel/setup.bash; roslaunch mavros apm_custom.launch gcs_url:="udp://$rosIp:9000@10.0.0.70:6000?ids=1,255,252")&
+(source $HOME/swanson_ws/devel/setup.bash; roslaunch mavros initialize_ekf.launch)&
 sleep 10
-(source /swanson/catkin_ws/devel/setup.bash; rosrun mavros mavsys mode -c GUIDED)& # APM
-# (source /swanson/catkin_ws/devel/setup.bash; rosrun mavros mavsys mode -c 15)& # PX4
-# (source /swanson/catkin_ws/devel/setup.bash; rosrun mavros mavsafety arm)&
-# (source /swanson/catkin_ws/devel/setup.bash; rosrun mavros altitude_fixer.py)&
+(source $HOME/swanson_ws/devel/setup.bash; rosrun mavros mavsys mode -c GUIDED)& # APM
+# (source $HOME/swanson_ws/devel/setup.bash; rosrun mavros mavsys mode -c 15)& # PX4
+# (source $HOME/swanson_ws/devel/setup.bash; rosrun mavros mavsafety arm)&
+# (source $HOME/swanson_ws/devel/setup.bash; rosrun mavros altitude_fixer.py)&
 sleep 5
-# (source /swanson/catkin_ws/devel/setup.bash; roslaunch swanson_sensors camera_d4xx.launch)&
-# (source /swanson/catkin_ws/devel/setup.bash; rosservice call /rtabmap/reset_odom "{}")&
+# (source $HOME/swanson_ws/devel/setup.bash; roslaunch swanson_sensors camera_d4xx.launch)&
+# (source $HOME/swanson_ws/devel/setup.bash; rosservice call /rtabmap/reset_odom "{}")&
 # sleep 5
-# (source /swanson/catkin_ws/devel/setup.bash; rosrun mavros vison_pose_republisher.py)&
-(source /swanson/catkin_ws/devel/setup.bash; rosrun mavros mavsys rate --position 20)&
-(source /swanson/catkin_ws/devel/setup.bash; rosrun mavros mavsys rate --raw-sensors 10)&
+# (source $HOME/swanson_ws/devel/setup.bash; rosrun mavros vison_pose_republisher.py)&
+(source $HOME/swanson_ws/devel/setup.bash; rosrun mavros mavsys rate --position 20)&
+(source $HOME/swanson_ws/devel/setup.bash; rosrun mavros mavsys rate --raw-sensors 10)&
 read asdf

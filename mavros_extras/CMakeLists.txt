@@ -84,6 +84,7 @@ add_library(mavros_extras
   src/plugins/trajectory.cpp
   src/plugins/vibration.cpp
   src/plugins/vision_pose_estimate.cpp
+  src/plugins/vision_pose_delta.cpp
   src/plugins/vision_speed_estimate.cpp
   src/plugins/wheel_odometry.cpp
   src/plugins/wheel_encoders.cpp

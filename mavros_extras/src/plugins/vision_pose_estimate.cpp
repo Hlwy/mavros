@@ -18,6 +18,7 @@
 #include <mavros/mavros_plugin.h>
 #include <mavros/setpoint_mixin.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <tf2_eigen/tf2_eigen.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
@@ -37,8 +38,8 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 	VisionPoseEstimatePlugin() : PluginBase(),
-		sp_nh("~vision_pose"), roll_offset(3.14159), pitch_offset(0.0), yaw_offset(0.0),
-		tf_rate(10.0), px4_tf_rotate(true), tf_send(false)
+		sp_nh("~vision_pose"), roll_offset(0.0), pitch_offset(0.0), yaw_offset(0.0),
+		tf_rate(10.0), px4_tf_rotate(true), send_pose_estimate(false), tf_send(false)
 	{ }
 
 	void initialize(UAS &uas_)
@@ -50,6 +51,7 @@ public:
 		// tf params
 		sp_nh.param("apm_use_delta", apm_use_deltas, false);
 		sp_nh.param("px4_tf_rotate", px4_tf_rotate, false);
+		sp_nh.param("send_pose_estimate", send_pose_estimate, false);
 		sp_nh.param("good_health_thresh", good_health_thresh, 0.1);
 		sp_nh.param("bad_health_thresh", bad_health_thresh, 1000.0);
 		sp_nh.param("default_confidence", default_confidence, 50.0);
@@ -65,7 +67,9 @@ public:
 		ROS_INFO_NAMED("vision_pose", "Vision Pose Offsets (Roll, Pitch, Yaw) --- %.3lf, %.3lf, %.3lf",
 			roll_offset, pitch_offset, yaw_offset
 		);
-
+		if(send_pose_estimate){
+			debug_pose_pub = sp_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose_estimate", 10);
+		}
 		if (tf_listen) {
 			ROS_INFO_STREAM_NAMED("vision_pose", "Listen to vision transform " << tf_frame_id
 						<< " -> " << tf_child_frame_id);
@@ -90,9 +94,11 @@ private:
 
 	ros::Subscriber vision_sub;
 	ros::Subscriber vision_cov_sub;
+	ros::Publisher debug_pose_pub;
 
 	bool px4_tf_rotate;
 	bool apm_use_deltas;
+	bool send_pose_estimate;
 	double good_health_thresh;
 	double bad_health_thresh;
 	double default_confidence;
@@ -140,8 +146,6 @@ private:
 			ROS_DEBUG_THROTTLE_NAMED(10, "vision_pose", "Vision: Same transform as last one, dropped.");
 			return;
 		}
-
-		// ROS_DEBUG_STREAM_NAMED("vision_pose", "Vision: Covariance: " << std::endl << cov);
 
 		if(!apm_use_deltas){
 			Eigen::Vector3d position;
@@ -225,7 +229,6 @@ private:
 			auto cov_ned = ftf::transform_frame_enu_ned(cov);
 			ftf::EigenMapConstCovariance6d cov_map(cov_ned.data());
 			auto urt_view = Eigen::Matrix<double, 6, 6>(cov_map.triangularView<Eigen::Upper>());
-			// ROS_DEBUG_STREAM_NAMED("vision_pose", "Vision: Covariance URT: " << std::endl << urt_view);
 			// ROS_DEBUG_STREAM_NAMED("vision_pose", "Vision: Covariance URT: " << std::endl << urt_view(0,0));
 
 			double confidence = 0.0;
@@ -261,9 +264,48 @@ private:
 
 			// just the URT of the 6x6 Pose Covariance Matrix, given
 			// that the matrix is symmetric
-			// ftf::covariance_urt_to_mavlink(cov_map, vp.covariance);
 			UAS_FCU(m_uas)->send_message_ignore_drop(vp);
 			// ROS_DEBUG_STREAM_NAMED("vision_pose", "VISION_POSITION_DELTA Msg sent! " << std::endl);
+			if(send_pose_estimate){
+				// geometry_msgs::Quaternion quat;
+				Eigen::Quaterniond quat {};
+				geometry_msgs::PoseWithCovarianceStamped pMsg;
+
+				ROS_DEBUG_STREAM_NAMED("vision_pose", "Vision: Covariance URT: " << std::endl << urt_view);
+
+				// header
+				pMsg.header.stamp = stamp;
+				pMsg.header.frame_id = tf_frame_id;
+				// pose
+				pMsg.pose.pose.position.x = position.x();
+				pMsg.pose.pose.position.y = position.y();
+				pMsg.pose.pose.position.z = position.z();
+				// quat = Eigen::Quaterniond(cur_rotation);
+				quat = Eigen::Quaterniond(
+					ftf::transform_orientation_enu_ned(
+						ftf::transform_orientation_baselink_aircraft(Eigen::Quaterniond(tr.rotation())
+				)));
+				tf::quaternionEigenToMsg(quat, pMsg.pose.pose.orientation);
+				// quat = tf2::toMsg(ftf::quaternion_from_rpy(rpy.x(), rpy.y(), rpy.z()));
+				pMsg.pose.covariance[0] = urt_view(0,0);	// x
+				pMsg.pose.covariance[7] = urt_view(1,1);	// y
+				pMsg.pose.covariance[14] = urt_view(2,2);
+
+				// publish
+				debug_pose_pub.publish(pMsg);
+
+				// mavlink::common::msg::VISION_POSITION_ESTIMATE vpp{};
+				// vpp.usec = (uint64_t) (stamp.toNSec() / 1000);
+				// vpp.x = position.x();
+				// vpp.y = position.y();
+				// vpp.z = position.z();
+				// vpp.roll = rpy.x();
+				// vpp.pitch = rpy.y();
+				// vpp.yaw = rpy.z();
+				// ftf::covariance_urt_to_mavlink(cov_map, vpp.covariance);
+				// UAS_FCU(m_uas)->send_message_ignore_drop(vpp);
+			}
+
 			// last_pose = tr;
 			last_transform_stamp = stamp;
 		}

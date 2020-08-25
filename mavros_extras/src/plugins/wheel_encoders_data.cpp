@@ -663,9 +663,7 @@ private:
 			// auto wheel_dist_msg = boost::make_shared<mavros_msgs::WheelEncodersDataStamped>();
 			//
 			// wheel_dist_msg->header.stamp = timestamp;
-			// wheel_dist_msg->data.resize(wheel_dist.count);
-			// std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, wheel_dist_msg->data.begin());
-			//
+			// std::copy_n(wheel_dist.distance.begin(), wheel_dist.count, wheel_dist_msg->distance_traveled.begin());
 			// dist_pub.publish(wheel_dist_msg);
 		}
 
