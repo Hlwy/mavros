@@ -192,7 +192,12 @@ private:
 			ROS_DEBUG_STREAM_NAMED("vision_pose", "VISION_POSITION_ESTIMATE Msg sent! " << std::endl);
 		} else{
 			Eigen::Vector3d position = ftf::transform_frame_enu_ned(Eigen::Vector3d(tr.translation()));
-			Eigen::Vector3d rpy = ftf::quaternion_to_rpy(ftf::transform_orientation_enu_ned(Eigen::Quaterniond(tr.rotation())));
+			// Eigen::Vector3d rpy = ftf::quaternion_to_rpy(ftf::transform_orientation_enu_ned(Eigen::Quaterniond(tr.rotation())));
+			Eigen::Vector3d rpy = ftf::quaternion_to_rpy(
+							  ftf::transform_orientation_enu_ned(
+							  ftf::transform_orientation_baselink_aircraft(Eigen::Quaterniond(tr.rotation())
+						  	))
+			);
 			Eigen::Matrix3d cur_rotation;
 			cur_rotation = Eigen::AngleAxisd(rpy.x(), Eigen::Vector3d::UnitX())
 						* Eigen::AngleAxisd(rpy.y(), Eigen::Vector3d::UnitY())
@@ -244,7 +249,7 @@ private:
 			mavlink::ardupilotmega::msg::VISION_POSITION_DELTA vp{};
 			vp.time_usec = stamp.toNSec() / 1000;
 			vp.time_delta_usec = vp.time_usec - (last_transform_stamp.toNSec() / 1000);
-			vp.position_delta[0] = -delta_pos.x();
+			vp.position_delta[0] = delta_pos.x();
 			vp.position_delta[1] = delta_pos.y();
 			vp.position_delta[2] = delta_pos.z();
 			vp.angle_delta[0] = delta_rpy.x();
