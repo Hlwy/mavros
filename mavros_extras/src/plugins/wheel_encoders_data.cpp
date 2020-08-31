@@ -20,6 +20,7 @@
 #include <mavconn/interface.h>
 
 #include <geometry_msgs/TwistWithCovarianceStamped.h>
+#include <std_srvs/Empty.h>
 #include <nav_msgs/Odometry.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -152,6 +153,8 @@ public:
 		}
 		// No-odometry warning
 		else ROS_WARN_NAMED("wheel_encoders_data", "WO: No odometry computations will be performed.");
+
+		service = wo_nh.advertiseService("reset_service", &WheelEncodersDataPlugin::reset_callback, this);
 	}
 
 	Subscriptions get_subscriptions()
@@ -209,6 +212,15 @@ private:
 	Eigen::Vector3d flowtwist;		//!< twist (vx, vy, vyaw)
 	Eigen::Matrix3d rpose_cov;	//!< pose error 1-var
 	Eigen::Vector3d rtwist_cov;	//!< twist error 1-var (vx_cov, vy_cov, vyaw_cov)
+
+	ros::ServiceServer service;
+
+	bool reset_callback(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response){
+		ROS_INFO_NAMED("wheel_encoders_data", "Resetting Odometry");
+		rpose = Eigen::Vector3d::Zero();
+		yaw_initialized = false;
+		return true;
+	}
 
 	/**
 	 * @brief Publish odometry.

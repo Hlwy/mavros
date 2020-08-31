@@ -39,7 +39,10 @@ public:
 
 	VisionPoseEstimatePlugin() : PluginBase(),
 		sp_nh("~vision_pose"), roll_offset(0.0), pitch_offset(0.0), yaw_offset(0.0),
-		tf_rate(10.0), px4_tf_rotate(true), send_pose_estimate(false), tf_send(false)
+		tf_rate(10.0), px4_tf_rotate(true), send_pose_estimate(false),
+		check_pose_glitch(true), min_glitch_confidence(0.0), mid_glitch_confidence(0.0),
+		dist_min_err_thresh(0.5), dist_mid_err_thresh(0.5), dist_max_err_thresh(0.1),
+		tf_send(false)
 	{ }
 
 	void initialize(UAS &uas_)
@@ -52,9 +55,15 @@ public:
 		sp_nh.param("apm_use_delta", apm_use_deltas, false);
 		sp_nh.param("px4_tf_rotate", px4_tf_rotate, false);
 		sp_nh.param("send_pose_estimate", send_pose_estimate, false);
+		sp_nh.param("check_pose_glitch", check_pose_glitch, false);
+		sp_nh.param("dist_min_err_thresh", dist_min_err_thresh, 0.05);
+		sp_nh.param("dist_mid_err_thresh", dist_mid_err_thresh, 0.05);
+		sp_nh.param("dist_max_err_thresh", dist_max_err_thresh, 0.1);
 		sp_nh.param("good_health_thresh", good_health_thresh, 0.1);
 		sp_nh.param("bad_health_thresh", bad_health_thresh, 1000.0);
 		sp_nh.param("default_confidence", default_confidence, 50.0);
+		sp_nh.param("min_glitch_confidence", min_glitch_confidence, 1.0);
+		sp_nh.param("mid_glitch_confidence", mid_glitch_confidence, 1.0);
 		sp_nh.param("offsets/roll", roll_offset, 0.0);
 		sp_nh.param("offsets/pitch", pitch_offset, 0.0);
 		sp_nh.param("offsets/yaw", yaw_offset, 0.0);
@@ -99,9 +108,15 @@ private:
 	bool px4_tf_rotate;
 	bool apm_use_deltas;
 	bool send_pose_estimate;
+	bool check_pose_glitch;
+	double dist_min_err_thresh;
+	double dist_mid_err_thresh;
+	double dist_max_err_thresh;
 	double good_health_thresh;
 	double bad_health_thresh;
 	double default_confidence;
+	double min_glitch_confidence;
+	double mid_glitch_confidence;
 	std::string tf_frame_id;
 	std::string tf_child_frame_id;
 	double tf_rate;
@@ -215,6 +230,11 @@ private:
 				return;
 			}
 
+			double dx = position.x() - prev_position.x();
+			double dy = position.y() - prev_position.y();
+			double distErrMetric = std::sqrt(dx*dx + dy*dy);
+			// ROS_DEBUG_THROTTLE_NAMED(5, "vision_pose", "Pose Error = %.4lf -- dX, dY = %.4lf, %.4lf",distErrMetric, dx, dy);
+
 			Eigen::Vector3d delta_pos = position - prev_position;
 			delta_pos = prev_rotation_inverse * delta_pos;
 			Eigen::Matrix3d delta_rot = prev_rotation_inverse * cur_rotation;
@@ -235,10 +255,10 @@ private:
 			double cov_health_metric = urt_view(0,0);
 			if((cov_health_metric <= good_health_thresh) && (cov_health_metric != 0.0) ){
 				confidence = 100.0;
-				ROS_DEBUG_NAMED("vision_pose", "Highest Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) <= Good Health Threshold (%.5lf)", confidence, cov_health_metric, good_health_thresh);
+				// ROS_DEBUG_NAMED("vision_pose", "Highest Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) <= Good Health Threshold (%.5lf)", confidence, cov_health_metric, good_health_thresh);
 			} else if((cov_health_metric >= bad_health_thresh) && (cov_health_metric != 0.0) ){
 				confidence = 0.0;
-				ROS_DEBUG_NAMED("vision_pose", "Lowest Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) >= Bad Health Threshold (%.5lf)", confidence, cov_health_metric, bad_health_thresh);
+				// ROS_DEBUG_NAMED("vision_pose", "Lowest Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) >= Bad Health Threshold (%.5lf)", confidence, cov_health_metric, bad_health_thresh);
 			} else if(cov_health_metric == 0.0){
 				confidence = 100.0;
 				ROS_DEBUG_NAMED("vision_pose", "Null Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) == 0", confidence, cov_health_metric);
@@ -247,6 +267,32 @@ private:
 				ROS_DEBUG_NAMED("vision_pose", "Default Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf)", confidence, cov_health_metric);
 			}
 
+			if( (confidence > 0.0) && (check_pose_glitch) ){
+				if(std::fabs(dx) >= dist_max_err_thresh){
+					ROS_DEBUG_NAMED("vision_pose", "Vision Pose Major Glitch --> Estimate Health = 0.0");
+					ROS_DEBUG_NAMED("vision_pose", " --- Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+					confidence = 0.0;
+				} else if( (std::fabs(dx) >= dist_mid_err_thresh) && (std::fabs(dx) < dist_max_err_thresh) ){
+					ROS_DEBUG_NAMED("vision_pose", "Vision Pose Medium Glitch --> Estimate Health = %.1lf", mid_glitch_confidence);
+					ROS_DEBUG_NAMED("vision_pose", " --- Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+					confidence = mid_glitch_confidence;
+				} else if( (std::fabs(dx) >= dist_min_err_thresh) && (std::fabs(dx) < dist_mid_err_thresh) ){
+					ROS_DEBUG_NAMED("vision_pose", "Vision Pose Minor Glitch --> Estimate Health = %.1lf", min_glitch_confidence);
+					ROS_DEBUG_NAMED("vision_pose", " --- Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+					confidence = min_glitch_confidence;
+				}
+			}
+			// if( (confidence > 0.0) && (check_pose_glitch) ){
+			// 	if(distErrMetric >= dist_max_err_thresh){
+			// 		ROS_DEBUG_NAMED("vision_pose", "Vision Pose Major Glitch --> Setting Estimate Health to (0.0)");
+			// 		ROS_DEBUG_NAMED("vision_pose", " --- Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+			// 		confidence = 0.0;
+			// 	} else if( (distErrMetric >= dist_err_thresh) && (distErrMetric < dist_max_err_thresh) ){
+			// 		ROS_DEBUG_NAMED("vision_pose", "Vision Pose Minor Glitch --> Setting  Estimate Health to (%.1lf)", glitch_confidence);
+			// 		ROS_DEBUG_NAMED("vision_pose", " --- Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+			// 		confidence = glitch_confidence;
+			// 	}
+			// }
 
 			// mavlink::common::msg::VISION_POSITION_ESTIMATE vp{};
 			mavlink::ardupilotmega::msg::VISION_POSITION_DELTA vp{};
@@ -271,7 +317,7 @@ private:
 				Eigen::Quaterniond quat {};
 				geometry_msgs::PoseWithCovarianceStamped pMsg;
 
-				ROS_DEBUG_STREAM_NAMED("vision_pose", "Vision: Covariance URT: " << std::endl << urt_view);
+				// ROS_DEBUG_STREAM_NAMED("vision_pose", "Vision: Covariance URT: " << std::endl << urt_view);
 
 				// header
 				pMsg.header.stamp = stamp;
