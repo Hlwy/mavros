@@ -146,6 +146,7 @@ vision_pose:
   good_health_thresh: 0.001
   bad_health_thresh: 1000.0
   default_confidence: 50.0
+  max_confidence: 100.0
   min_glitch_confidence: 75.0
   mid_glitch_confidence: 50.0
   offsets:

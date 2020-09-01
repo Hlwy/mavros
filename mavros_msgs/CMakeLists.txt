@@ -90,6 +90,7 @@ add_service_files(
   ParamPull.srv
   ParamPush.srv
   ParamSet.srv
+  VisoParamSet.srv
   SetMavFrame.srv
   SetMode.srv
   StreamRate.srv

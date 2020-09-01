@@ -234,8 +234,8 @@ private:
 		// Get initial yaw (from IMU)
 		// Check that IMU was already initialized
 		if (!yaw_initialized && m_uas->get_attitude_imu_enu()) {
-			double yaw = ftf::quaternion_get_yaw(ftf::to_eigen(m_uas->get_attitude_orientation_enu()));
-
+			// double yaw = ftf::quaternion_get_yaw(ftf::to_eigen(m_uas->get_attitude_orientation_enu()));
+			double yaw = M_PI / 2.0;
 			// Rotate current pose by initial yaw
 			Eigen::Rotation2Dd rot(yaw);
 			rpose.head(2) = rot * rpose.head(2); // x,y

@@ -15,10 +15,11 @@
  * https://github.com/mavlink/mavros/tree/master/LICENSE.md
  */
 
+#include <tf2_eigen/tf2_eigen.h>
 #include <mavros/mavros_plugin.h>
 #include <mavros/setpoint_mixin.h>
+#include <mavros_msgs/VisoParamSet.h>
 #include <eigen_conversions/eigen_msg.h>
-#include <tf2_eigen/tf2_eigen.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
@@ -42,7 +43,7 @@ public:
 		tf_rate(10.0), px4_tf_rotate(true), send_pose_estimate(false),
 		check_pose_glitch(true), min_glitch_confidence(0.0), mid_glitch_confidence(0.0),
 		dist_min_err_thresh(0.5), dist_mid_err_thresh(0.5), dist_max_err_thresh(0.1),
-		tf_send(false)
+		max_confidence(100.0), tf_send(false)
 	{ }
 
 	void initialize(UAS &uas_)
@@ -61,6 +62,7 @@ public:
 		sp_nh.param("dist_max_err_thresh", dist_max_err_thresh, 0.1);
 		sp_nh.param("good_health_thresh", good_health_thresh, 0.1);
 		sp_nh.param("bad_health_thresh", bad_health_thresh, 1000.0);
+		sp_nh.param("max_confidence", max_confidence, 100.0);
 		sp_nh.param("default_confidence", default_confidence, 50.0);
 		sp_nh.param("min_glitch_confidence", min_glitch_confidence, 1.0);
 		sp_nh.param("mid_glitch_confidence", mid_glitch_confidence, 1.0);
@@ -88,7 +90,7 @@ public:
 			vision_sub = sp_nh.subscribe("pose", 10, &VisionPoseEstimatePlugin::vision_cb, this);
 			vision_cov_sub = sp_nh.subscribe("pose_cov", 10, &VisionPoseEstimatePlugin::vision_cov_cb, this);
 		}
-
+		service = sp_nh.advertiseService("set_param", &VisionPoseEstimatePlugin::param_callback, this);
 		// last_pose.setZero();
 	}
 
@@ -104,6 +106,7 @@ private:
 	ros::Subscriber vision_sub;
 	ros::Subscriber vision_cov_sub;
 	ros::Publisher debug_pose_pub;
+	ros::ServiceServer service;
 
 	bool px4_tf_rotate;
 	bool apm_use_deltas;
@@ -114,6 +117,7 @@ private:
 	double dist_max_err_thresh;
 	double good_health_thresh;
 	double bad_health_thresh;
+	double max_confidence;
 	double default_confidence;
 	double min_glitch_confidence;
 	double mid_glitch_confidence;
@@ -130,6 +134,26 @@ private:
 	double pitch_offset;
 	double yaw_offset;
 	bool tf_send;
+
+	bool param_callback(mavros_msgs::VisoParamSet::Request& request, mavros_msgs::VisoParamSet::Response& response){
+		if( (request.param_id.compare("max_confidence")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			max_confidence = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("min_glitch_confidence")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			min_glitch_confidence = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("mid_glitch_confidence")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			mid_glitch_confidence = (double) request.value;
+			response.success = true;
+		} else{
+			ROS_INFO_NAMED("vision_pose", "Requested parameter \'%s\' doesn't match any known parameters", request.param_id.c_str());
+			response.success = false;
+		}
+		return true;
+	}
 
 	// void publish_tf(const ros::Time &stamp, const Eigen::Affine3d &tr)
 	void publish_tf(const geometry_msgs::PoseStamped::ConstPtr &msg)
@@ -254,13 +278,13 @@ private:
 			double confidence = 0.0;
 			double cov_health_metric = urt_view(0,0);
 			if((cov_health_metric <= good_health_thresh) && (cov_health_metric != 0.0) ){
-				confidence = 100.0;
+				confidence = max_confidence;
 				// ROS_DEBUG_NAMED("vision_pose", "Highest Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) <= Good Health Threshold (%.5lf)", confidence, cov_health_metric, good_health_thresh);
 			} else if((cov_health_metric >= bad_health_thresh) && (cov_health_metric != 0.0) ){
 				confidence = 0.0;
 				// ROS_DEBUG_NAMED("vision_pose", "Lowest Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) >= Bad Health Threshold (%.5lf)", confidence, cov_health_metric, bad_health_thresh);
 			} else if(cov_health_metric == 0.0){
-				confidence = 100.0;
+				confidence = max_confidence;
 				ROS_DEBUG_NAMED("vision_pose", "Null Vision Pose Estimate Health (%.1lf) ---- Confidence Metric (%.5lf) == 0", confidence, cov_health_metric);
 			} else{
 				confidence = default_confidence;
