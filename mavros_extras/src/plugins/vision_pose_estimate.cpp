@@ -138,15 +138,15 @@ private:
 	bool param_callback(mavros_msgs::VisoParamSet::Request& request, mavros_msgs::VisoParamSet::Response& response){
 		if( (request.param_id.compare("max_confidence")) == 0 ){
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
-			max_confidence = (double) request.value;
+			this->max_confidence = (double) request.value;
 			response.success = true;
 		} else if( (request.param_id.compare("min_glitch_confidence")) == 0 ){
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
-			min_glitch_confidence = (double) request.value;
+			this->min_glitch_confidence = (double) request.value;
 			response.success = true;
 		} else if( (request.param_id.compare("mid_glitch_confidence")) == 0 ){
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
-			mid_glitch_confidence = (double) request.value;
+			this->mid_glitch_confidence = (double) request.value;
 			response.success = true;
 		} else{
 			ROS_INFO_NAMED("vision_pose", "Requested parameter \'%s\' doesn't match any known parameters", request.param_id.c_str());
