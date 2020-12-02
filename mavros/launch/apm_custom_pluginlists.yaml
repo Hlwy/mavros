@@ -29,11 +29,12 @@ plugin_blacklist:
 - odom
 - odometry
 - wheel_encoders
-- wheel_odometry
 - vision_pose_delta
+- wheel_encoders_data
 # - vision*
 plugin_whitelist:
 - vision_pose_estimate
+- wheel_odometry
 - global_position
 - local_position
 - actuator_control
@@ -42,4 +43,3 @@ plugin_whitelist:
 - imu
 - sys_time
 - distance_sensor
-- wheel_encoders_data

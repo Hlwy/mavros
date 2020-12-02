@@ -22,6 +22,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <std_srvs/Empty.h>
 
 namespace mavros {
 namespace extra_plugins {
@@ -62,10 +63,8 @@ public:
 
 		bool use_rpm;
 		wo_nh.param("use_rpm", use_rpm, false);
-		if (use_rpm)
-			odom_mode = OM::RPM;
-		else
-			odom_mode = OM::DIST;
+		if (use_rpm) odom_mode = OM::RPM;
+		else odom_mode = OM::DIST;
 
 		// Odometry params
 		wo_nh.param("send_twist", twist_send, false);
@@ -143,15 +142,11 @@ public:
 
 		// Advertize topics
 		if (odom_mode != OM::NONE) {
-			if (twist_send)
-				twist_pub = wo_nh.advertise<geometry_msgs::TwistWithCovarianceStamped>("velocity", 10);
-			else
-				odom_pub = wo_nh.advertise<nav_msgs::Odometry>("odom", 10);
-		}
-		// No-odometry warning
-		else
-			ROS_WARN_NAMED("wo", "WO: No odometry computations will be performed.");
+			if (twist_send) twist_pub = wo_nh.advertise<geometry_msgs::TwistWithCovarianceStamped>("velocity", 10);
+			else odom_pub = wo_nh.advertise<nav_msgs::Odometry>("odom", 10);
+		} else ROS_WARN_NAMED("wo", "WO: No odometry computations will be performed.");
 
+		service = wo_nh.advertiseService("reset_service", &WheelOdometryPlugin::reset_callback, this);
 	}
 
 	Subscriptions get_subscriptions()
@@ -202,6 +197,15 @@ private:
 	Eigen::Vector3d rtwist;		//!< twist (vx, vy, vyaw)
 	Eigen::Matrix3d rpose_cov;	//!< pose error 1-var
 	Eigen::Vector3d rtwist_cov;	//!< twist error 1-var (vx_cov, vy_cov, vyaw_cov)
+
+	ros::ServiceServer service;
+
+	bool reset_callback(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response){
+		ROS_INFO_NAMED("wheel_encoders_data", "Resetting Odometry");
+		rpose = Eigen::Vector3d::Zero();
+		yaw_initialized = false;
+		return true;
+	}
 
 	/**
 	 * @brief Publish odometry.
