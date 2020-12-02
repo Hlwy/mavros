@@ -1,16 +1,14 @@
 #!/usr/bin/env python
+import math
 import threading
 import rospy, tf
 import numpy as np
 import os, csv, time
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from tf.transformations import euler_from_quaternion, quaternion_from_euler, euler_matrix, quaternion_matrix, quaternion_from_matrix
 from std_srvs.srv import Empty
 from rtabmap_ros.srv import ResetPose
-
-import math
-import transformations as tfs
 
 def quat2euler(data):
     quats = (data.orientation.x, data.orientation.y,data.orientation.z,data.orientation.w)
@@ -98,7 +96,7 @@ class mavros_vision_pose_republisher:
             self.H_T265body_aeroBody = np.array([[0,1,0,0],[1,0,0,0],[0,0,-1,0],[0,0,0,1]])
         elif camera_orientation == 2:   # 45degree forward
             self.H_aeroRef_T265Ref   = np.array([[0,0,-1,0],[1,0,0,0],[0,-1,0,0],[0,0,0,1]])
-            self.H_T265body_aeroBody = (tfs.euler_matrix(math.pi/4, 0, 0)).dot(np.linalg.inv(self.H_aeroRef_T265Ref))
+            self.H_T265body_aeroBody = (euler_matrix(math.pi/4, 0, 0)).dot(np.linalg.inv(self.H_aeroRef_T265Ref))
         else:                           # Default is facing forward, USB port to the right
             self.H_aeroRef_T265Ref   = np.array([[0,0,-1,0],[1,0,0,0],[0,-1,0,0],[0,0,0,1]])
             self.H_T265body_aeroBody = np.linalg.inv(self.H_aeroRef_T265Ref)
@@ -117,12 +115,12 @@ class mavros_vision_pose_republisher:
         # default_topic_out = rospy.get_param('~output_topic', "/mavros/vision_pose/pose")
         sec_output_topic = default_topic_out
         if(self.pose_output_type == 1):
-            output_topic = "/mavros/vision_pose/pose_cov"
+            output_topic = "mavros/vision_pose/pose_cov"
             # sec_output_topic = "/mavros/vision_delta/pose_cov"
-            sec_output_topic = "/vision_pose/pose_estimate"
+            sec_output_topic = "vision_pose/pose_estimate"
         elif(self.pose_output_type == 2):
             self.allow_msg_pub = True
-            output_topic = "/mavros/fake_gps/vision"
+            output_topic = "mavros/fake_gps/vision"
         else: output_topic = default_topic_out
 
 
@@ -138,13 +136,23 @@ class mavros_vision_pose_republisher:
             self.out_pub = rospy.Publisher(output_topic, PoseStamped, queue_size=10)
             # self.sec_out_pub = rospy.Publisher(sec_output_topic, PoseStamped, queue_size=10)
 
+        self.reset_srv = rospy.Service("vision_pose_republisher/reset", Empty, self.reset_vo)
         self.r = rospy.Rate(update_rate)
         print("[INFO] mavros_vision_pose_republisher Node --- Started...")
 
         # callRosService(self.rtabPauseId, None)
-        if(self.pose_output_type == 2): callRosService(self.rtabResetPoseId, [0.0, 0.0, 0.0, 0.0, 0.0, np.deg2rad(90.0)])
+        if(self.pose_output_type == 2): callRosService(self.ns + "/" + self.rtabResetPoseId, [0.0, 0.0, 0.0, 0.0, 0.0, np.deg2rad(90.0)])
         else: callRosService(self.rtabResetId, None)
         self.RotMat = get_tf_frame_pose()
+
+    def reset_vo(self, req):
+        print("[INFO] mavros_vision_pose_republisher --- Resetting...")
+        self.recvd_initial_pose = False
+        self.allow_msg_pub = False
+        self.pose_offset = None
+        if(self.pose_output_type == 2): callRosService(self.ns + "/" + self.rtabResetPoseId, [0.0, 0.0, 0.0, 0.0, 0.0, np.deg2rad(90.0)])
+        else: callRosService(self.rtabResetId, None)
+        return []
 
     def estimateCallback(self, msg):
         data =  msg.pose.pose
@@ -188,7 +196,7 @@ class mavros_vision_pose_republisher:
 
             """ Extracted from vision_to_mavros repo """
             # In transformations, Quaternions w+ix+jy+kz are represented as [w, x, y, z]!
-            H_T265Ref_T265body = tfs.quaternion_matrix([
+            H_T265Ref_T265body = quaternion_matrix([
                 msg.pose.pose.orientation.w,
                 msg.pose.pose.orientation.x,
                 msg.pose.pose.orientation.y,
@@ -201,7 +209,7 @@ class mavros_vision_pose_republisher:
             HrefToBody = self.H_aeroRef_T265Ref.dot( H_T265Ref_T265body.dot( self.H_T265body_aeroBody))
 
             # Start Camera Offsets
-            H_body_camera = tfs.euler_matrix(0, 1.5717, -1.5717, 'sxyz')
+            H_body_camera = euler_matrix(0, 1.5717, -1.5717, 'sxyz')
             H_body_camera[0][3] = 0.0
             H_body_camera[1][3] = 0.0
             H_body_camera[2][3] = 0.0
@@ -220,7 +228,7 @@ class mavros_vision_pose_republisher:
                 H_PrevAeroBody_CurrAeroBody = (np.linalg.inv(self.H_aeroRef_PrevAeroBody)).dot(self.H_aeroRef_aeroBody)
                 delta_time_us    = current_time_us - send_vision_position_delta_message.prev_time_us
                 delta_position_m = [H_PrevAeroBody_CurrAeroBody[0][3], H_PrevAeroBody_CurrAeroBody[1][3], H_PrevAeroBody_CurrAeroBody[2][3]]
-                delta_angle_rad  = np.array( tfs.euler_from_matrix(H_PrevAeroBody_CurrAeroBody, 'sxyz'))
+                delta_angle_rad  = np.array( euler_from_matrix(H_PrevAeroBody_CurrAeroBody, 'sxyz'))
 
             print("DEBUG: Raw RPY[deg]: {}".format( np.array( tf.euler_from_matrix( H_T265Ref_T265body, 'sxyz')) * 180 / m.pi))
             print("DEBUG: NED RPY[deg]: {}".format( np.array( tf.euler_from_matrix( H_aeroRef_aeroBody, 'sxyz')) * 180 / m.pi))
@@ -238,7 +246,8 @@ class mavros_vision_pose_republisher:
             # END Original SECTION
 
             # TEST SECTION
-            delta_angle_rad  = np.array( tfs.quaternion_from_matrix(HrefToBody) )
+            # delta_angle_rad  = np.array( tfs.quaternion_from_matrix(HrefToBody) )
+            delta_angle_rad  = np.array( quaternion_from_matrix(HrefToBody) )
             outMsg.pose.pose.position.x = HrefToBody[0][3]
             outMsg.pose.pose.position.y = HrefToBody[1][3]
             outMsg.pose.pose.orientation.x = delta_angle_rad[1]
