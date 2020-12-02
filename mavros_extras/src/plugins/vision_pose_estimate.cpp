@@ -138,15 +138,62 @@ private:
 	bool param_callback(mavros_msgs::VisoParamSet::Request& request, mavros_msgs::VisoParamSet::Response& response){
 		if( (request.param_id.compare("max_confidence")) == 0 ){
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
-			max_confidence = (double) request.value;
+			this->max_confidence = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("default_confidence")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->default_confidence = (double) request.value;
 			response.success = true;
 		} else if( (request.param_id.compare("min_glitch_confidence")) == 0 ){
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
-			min_glitch_confidence = (double) request.value;
+			this->min_glitch_confidence = (double) request.value;
 			response.success = true;
 		} else if( (request.param_id.compare("mid_glitch_confidence")) == 0 ){
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
-			mid_glitch_confidence = (double) request.value;
+			this->mid_glitch_confidence = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("good_health_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->good_health_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("bad_health_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->bad_health_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("dist_min_err_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->dist_min_err_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("dist_mid_err_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->dist_mid_err_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("dist_max_err_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->dist_max_err_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("good_health_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->good_health_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("bad_health_thresh")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			this->bad_health_thresh = (double) request.value;
+			response.success = true;
+		} else if( (request.param_id.compare("roll_offset")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			double tmpAngle = (double) request.value;
+			this->roll_offset = (double) tmpAngle/180.0*M_PI;
+			response.success = true;
+		} else if( (request.param_id.compare("pitch_offset")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			double tmpAngle = (double) request.value;
+			this->pitch_offset = (double) tmpAngle/180.0*M_PI;
+			response.success = true;
+		} else if( (request.param_id.compare("yaw_offset")) == 0 ){
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", request.param_id.c_str(), request.value);
+			double tmpAngle = (double) request.value;
+			this->yaw_offset = (double) tmpAngle/180.0*M_PI;
 			response.success = true;
 		} else{
 			ROS_INFO_NAMED("vision_pose", "Requested parameter \'%s\' doesn't match any known parameters", request.param_id.c_str());
@@ -242,9 +289,9 @@ private:
 						  	))
 			);
 			Eigen::Matrix3d cur_rotation;
-			cur_rotation = Eigen::AngleAxisd(rpy.x(), Eigen::Vector3d::UnitX())
-						* Eigen::AngleAxisd(rpy.y(), Eigen::Vector3d::UnitY())
-						* Eigen::AngleAxisd(rpy.z(), Eigen::Vector3d::UnitZ());
+			cur_rotation = Eigen::AngleAxisd(rpy.x() + this->roll_offset, Eigen::Vector3d::UnitX())
+						* Eigen::AngleAxisd(rpy.y() + this->pitch_offset, Eigen::Vector3d::UnitY())
+						* Eigen::AngleAxisd(rpy.z() + this->yaw_offset, Eigen::Vector3d::UnitZ());
 			if(!last_pose_recvd){
 				prev_position = position;
 				prev_rotation = cur_rotation;
