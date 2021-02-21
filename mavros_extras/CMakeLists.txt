@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   urdf
   visualization_msgs
   mavlink
+  dynamic_reconfigure
 )
 
 ## System dependencies are found with CMake's conventions
@@ -38,7 +39,9 @@ include(MavrosMavlink)
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
 # catkin_python_setup()
 
-
+generate_dynamic_reconfigure_options(
+     cfg/VisionEstimatePlugin.cfg
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -52,7 +55,7 @@ include(MavrosMavlink)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES
-CATKIN_DEPENDS geometry_msgs mavros mavros_msgs roscpp sensor_msgs std_msgs visualization_msgs
+CATKIN_DEPENDS geometry_msgs mavros mavros_msgs roscpp sensor_msgs std_msgs visualization_msgs dynamic_reconfigure
   DEPENDS Boost
 )
 
@@ -93,6 +96,7 @@ add_library(mavros_extras
 )
 add_dependencies(mavros_extras
   ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
 )
 target_link_libraries(mavros_extras
   ${mavros_LIBRARIES}

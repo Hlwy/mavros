@@ -15,10 +15,21 @@ class MavrosEkfInitializer(object):
         rospy.Subscriber('mavros/local_position/pose', PoseStamped, self.localPoseCallback)
         rospy.Subscriber('mavros/global_position/global', NavSatFix, self.globalPoseCallback)
         self._origin_pubber = rospy.Publisher('mavros/global_position/set_gp_origin', GeoPointStamped, queue_size=10)
-
+        self.r = rospy.Rate(1.0)
         # Pass these arguments in to be used in case global position is not available
         self._latitude = rospy.get_param('~fallback_latitude')
         self._longitude = rospy.get_param('~fallback_longitude')
+        self.do_manual_set = rospy.get_param('~do_manual_set', True)
+
+        self.manual_gps_msg = GeoPointStamped()
+        self.manual_gps_msg.position.altitude
+        self.manual_gps_msg.position.latitude = self._latitude
+        self.manual_gps_msg.position.longitude = self._longitude
+
+        if(self.do_manual_set):
+            rospy.loginfo("MavrosEkfInitializer() --- Pre-Setting Origin...")
+            self._origin_pubber.publish(self.manual_gps_msg)
+            self.r.sleep()
 
         time.sleep(5.0)
         while(not self._recvd_local_pose and self._max_retry_attempts >= 0):
@@ -32,9 +43,13 @@ class MavrosEkfInitializer(object):
 
     def globalPoseCallback(self, msg):
         self._cur_global_pos = msg
+        if(self.do_manual_set):
+            self._origin_pubber.publish(self.manual_gps_msg)
 
     def localPoseCallback(self, msg):
         self._recvd_local_pose = True
+        # if(self.do_manual_set):
+        #     self._origin_pubber.publish(self.manual_gps_msg)
 
     def set_ekf_origin(self):
         msg = GeoPointStamped()

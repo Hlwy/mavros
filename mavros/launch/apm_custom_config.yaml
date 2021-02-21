@@ -10,7 +10,7 @@ conn:
   heartbeat_rate: 1.0    # send hertbeat rate in Hertz
   heartbeat_mav_type: "ONBOARD_CONTROLLER"
   timeout: 10.0          # hertbeat timeout in seconds
-  timesync_rate: 5.0    # TIMESYNC rate in Hertz (feature disabled if 0.0)
+  timesync_rate: 0.1    # TIMESYNC rate in Hertz (feature disabled if 0.0)
   system_time_rate: 1.0  # send system time to FCU rate in Hertz (disabled if 0.0)
 
 # sys_status
@@ -77,7 +77,7 @@ setpoint_position:
 
 # setpoint_velocity
 setpoint_velocity:
-  mav_frame: LOCAL_NED
+  mav_frame: BODY_NED
   # mav_frame: BODY_NED
 
 #mav_frame: BODY_FLU

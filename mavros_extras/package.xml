@@ -30,6 +30,7 @@
   <depend>tf</depend>
   <depend>tf2_eigen</depend>
   <depend>mavlink</depend>
+  <depend>dynamic_reconfigure</depend>
 
   <export>
     <mavros plugin="${prefix}/mavros_plugins.xml" />
