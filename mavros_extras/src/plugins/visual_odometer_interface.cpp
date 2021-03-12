@@ -121,6 +121,9 @@ private:
 	std::string tf_frame_id 					= "odom";
 	std::string tf_child_frame_id 			= "base_link";
 
+	bool flip_enu_to_ned_ 					= false;
+	bool flip_x_vel_sign_ 					= false;
+	bool flip_y_vel_sign_ 					= false;
 	bool publish_debug_pose_estimate_ 			= false;
 	bool enable_vision_pose_delta_mavlink_ 		= false;
 	bool enable_vision_velocities_mavlink_ 		= true;
@@ -274,6 +277,18 @@ private:
 				yaw_offset_ = config.yaw_offset;
 				ROS_INFO_NAMED("visual_odometer", "Setting parameter \'%s\' to %.1f deg (%.3lf rad)", "yaw_offset_", yaw_offset_, yaw_offset_ * (M_PI/180.0));
 			}
+			if(config.flip_x_vel_sign != flip_x_vel_sign_){
+				flip_x_vel_sign_ = config.flip_x_vel_sign;
+				ROS_INFO_NAMED("visual_odometer", "Setting parameter \'%s\' to %s", "flip_x_vel_sign_", flip_x_vel_sign_ ? "true" : "false");
+			}
+			if(config.flip_y_vel_sign != flip_y_vel_sign_){
+				flip_y_vel_sign_ = config.flip_y_vel_sign;
+				ROS_INFO_NAMED("visual_odometer", "Setting parameter \'%s\' to %s", "flip_y_vel_sign_", flip_y_vel_sign_ ? "true" : "false");
+			}
+			if(config.flip_enu_to_ned != flip_enu_to_ned_){
+				flip_enu_to_ned_ = config.flip_enu_to_ned;
+				ROS_INFO_NAMED("visual_odometer", "Setting parameter \'%s\' to %s", "flip_enu_to_ned_", flip_enu_to_ned_ ? "true" : "false");
+			}
 			if(config.test_position_offset_corrections != test_position_offset_corrections_){
 				test_position_offset_corrections_ = config.test_position_offset_corrections;
 				ROS_INFO_NAMED("visual_odometer", "Setting parameter \'%s\' to %s", "test_position_offset_corrections_", test_position_offset_corrections_ ? "true" : "false");
@@ -402,12 +417,14 @@ private:
 
 		// Extract relavent data from the newly recieved visual odometer's pose
 		Eigen::Vector3d position = ftf::transform_frame_enu_ned(Eigen::Vector3d(tr.translation()));
-		Eigen::Quaterniond quat = ftf::transform_orientation_enu_ned(
-			ftf::transform_orientation_baselink_aircraft(
-				Eigen::Quaterniond(tr.rotation())
-			)
-		);
+		Eigen::Quaterniond orientation = ftf::transform_orientation_baselink_aircraft( Eigen::Quaterniond(tr.rotation()) );
+		Eigen::Quaterniond quat;
+		if(!flip_enu_to_ned_) quat = orientation;
+		else quat = ftf::transform_orientation_enu_ned(orientation);
+
 		Eigen::Vector3d rpy = ftf::quaternion_to_rpy(quat);
+		Eigen::Quaterniond quat_corrected = ftf::quaternion_from_rpy(rpy.x() + roll_offset, rpy.y() + pitch_offset, rpy.z() + yaw_offset);
+		Eigen::Vector3d rpy_corrected = ftf::quaternion_to_rpy(quat_corrected);
 
 		Eigen::Matrix3d cur_rotation;
 		cur_rotation = Eigen::AngleAxisd(rpy.x() + roll_offset, Eigen::Vector3d::UnitX())
@@ -422,7 +439,12 @@ private:
 		auto urt_view = Eigen::Matrix<double, 6, 6>(cov_map.triangularView<Eigen::Upper>());
 		// ROS_DEBUG_STREAM_NAMED("visual_odometer", "Vision: Covariance URT: " << std::endl << urt_view(0,0));
 
-		if(test_position_offset_corrections_){ position = correct_offset_rotation.inverse() * position; }
+		if(!flip_enu_to_ned_){ position = ftf::transform_frame_ned_enu(position); }
+
+		if(test_position_offset_corrections_){
+			position = correct_offset_rotation.inverse() * position;
+			rpy = rpy_corrected;
+		}
 
 		// If this is the first pose information recieved, update internally
 		// storage of data and skip computations for this turn
@@ -469,9 +491,9 @@ private:
 			vpp.x = position.x();
 			vpp.y = position.y();
 			vpp.z = position.z();
-			vpp.roll = rpy.x() + roll_offset;
-			vpp.pitch = rpy.y() + pitch_offset;
-			vpp.yaw = rpy.z() + yaw_offset;
+			vpp.roll = rpy.x();// + roll_offset;
+			vpp.pitch = rpy.y();// + pitch_offset;
+			vpp.yaw = rpy.z();// + yaw_offset;
 			ftf::covariance_urt_to_mavlink(cov_map, vpp.covariance);
 
 			// If there has been enough of a jump detected in the
@@ -536,8 +558,10 @@ private:
 
 			mavlink::common::msg::VISION_SPEED_ESTIMATE vs{};
 			vs.usec = (uint64_t) (stamp.toNSec() / 1000);
-			vs.x = velocities_out.x();
-			vs.y = velocities_out.y();
+			if(flip_x_vel_sign_) vs.x = (-1.0) * velocities_out.x();
+			else vs.x = velocities_out.x();
+			if(flip_y_vel_sign_) vs.y = (-1.0) * velocities_out.y();
+			else vs.y = velocities_out.y();
 			vs.z = velocities_out.z();
 			ftf::covariance_to_mavlink(velocities_out_cov, vs.covariance);
 			// If there has been enough of a jump detected in the
@@ -625,7 +649,8 @@ private:
 			pMsg.pose.pose.position.x = position.x();
 			pMsg.pose.pose.position.y = position.y();
 			pMsg.pose.pose.position.z = position.z();
-			tf::quaternionEigenToMsg(quat, pMsg.pose.pose.orientation);
+			if(test_position_offset_corrections_) tf::quaternionEigenToMsg(quat_corrected, pMsg.pose.pose.orientation);
+			else tf::quaternionEigenToMsg(quat, pMsg.pose.pose.orientation);
 
 			pMsg.pose.covariance[0] = urt_view(0,0);
 			pMsg.pose.covariance[7] = urt_view(1,1);
