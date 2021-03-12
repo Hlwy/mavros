@@ -1,9 +1,12 @@
 <launch>
 	<!-- vim: set ft=xml noet : -->
 	<!-- base node launch file-->
+	<arg name="node_name" 		default="mavros"/>
 	<arg name="debug" 			default="false"/>
 	<arg name="fcu_url" />
 	<arg name="gcs_url" />
+	<arg name="my_system_id" />
+	<arg name="my_component_id" />
 	<arg name="tgt_system" />
 	<arg name="tgt_component" />
 	<arg name="pluginlists_yaml" />
@@ -14,11 +17,13 @@
      <arg unless="$(arg debug)" name="launch_args" default=""/>
      <arg if="$(arg debug)"     name="launch_args" default="gdb -ex run --args"/>
 
-	<node pkg="mavros" type="mavros_node" name="mavros" required="$(eval not respawn_mavros)" clear_params="true" output="$(arg log_output)" respawn="$(arg respawn_mavros)" launch-prefix="$(arg launch_args)">
+	<node pkg="mavros" type="mavros_node" name="$(arg node_name)" required="$(eval not respawn_mavros)" clear_params="true" output="$(arg log_output)" respawn="$(arg respawn_mavros)" launch-prefix="$(arg launch_args)">
 		<param name="fcu_url" value="$(arg fcu_url)" />
 		<param name="gcs_url" value="$(arg gcs_url)" />
 		<param name="target_system_id" value="$(arg tgt_system)" />
 		<param name="target_component_id" value="$(arg tgt_component)" />
+		<param name="system_id" value="$(arg my_system_id)" />
+		<param name="component_id" value="$(arg my_component_id)" />
 		<param name="fcu_protocol" value="$(arg fcu_protocol)" />
 
 		<!-- load blacklist, config -->

@@ -59,6 +59,9 @@
 	<class name="vibration" type="mavros::extra_plugins::VibrationPlugin" base_class_type="mavros::plugin::PluginBase">
 		<description>Publish VIBRATION message data from FCU.</description>
 	</class>
+	<class name="visual_odometer_interface" type="mavros::extra_plugins::VisualOdometerInterfacePlugin" base_class_type="mavros::plugin::PluginBase">
+		<description>Send vision pose estimate to FCU.</description>
+	</class>
 	<class name="vision_pose_estimate" type="mavros::extra_plugins::VisionPoseEstimatePlugin" base_class_type="mavros::plugin::PluginBase">
 		<description>Send vision pose estimate to FCU.</description>
 	</class>

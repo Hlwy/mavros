@@ -3,7 +3,6 @@ plugin_blacklist:
 - ftp
 - safety_area
 - 3dr_radio
-- rc_io
 - setpoint_accel
 - setpoint_position
 - setpoint_attitude
@@ -30,10 +29,12 @@ plugin_blacklist:
 - odometry
 - wheel_encoders
 - vision_pose_delta
+- vision_pose_estimate
+- vision_speed_estimate
 - wheel_encoders_data
 # - vision*
 plugin_whitelist:
-- vision_pose_estimate
+- visual_odometer_interface
 - wheel_odometry
 - global_position
 - local_position
@@ -41,5 +42,6 @@ plugin_whitelist:
 - setpoint_raw
 - manual_control
 - imu
+- rc_io
 - sys_time
 - distance_sensor

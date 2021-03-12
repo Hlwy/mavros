@@ -14,17 +14,26 @@
  * in the top-level LICENSE file of the mavros repository.
  * https://github.com/mavlink/mavros/tree/master/LICENSE.md
  */
+// #include <mavlink/v2.0/common/mavlink.h>
+// #include <mavlink/v2.0/ardupilotmega/mavlink.h>
 
+#include <mavros/utils.h>
 #include <tf2_eigen/tf2_eigen.h>
 #include <mavros/mavros_plugin.h>
 #include <mavros/setpoint_mixin.h>
-#include <mavros_msgs/VisoParamSet.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <mavconn/mavlink_dialect.h>
+
+#include <mavros_msgs/Mavlink.h>
+#include <mavros_msgs/VisoParamSet.h>
 
 #include <dynamic_reconfigure/server.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <mavros_extras/VisionEstimatePluginConfig.h>
+#include <mavros_extras/VisualOdometerInterfacePluginConfig.h>
+// #include <mavros_extras/VisionEstimatePluginConfig.h>
+
+using ::mavlink::mavlink_message_t;
 
 namespace mavros {
 namespace extra_plugins{
@@ -53,7 +62,7 @@ public:
 		PluginBase::initialize(uas_);
 
 		bool tf_listen;
-
+		std::string mavlink_out_topic;
 		// tf params
 		sp_nh.param("apm_use_delta", apm_use_deltas_, false);
 		sp_nh.param("px4_tf_rotate", px4_tf_rotate_, false);
@@ -75,6 +84,7 @@ public:
 		sp_nh.param("tf/send", tf_send, false);
 		sp_nh.param<std::string>("tf/frame_id", tf_frame_id, "map");
 		sp_nh.param<std::string>("tf/child_frame_id", tf_child_frame_id, "vision_estimate");
+		sp_nh.param<std::string>("mavlink_out_topic", mavlink_out_topic, "/mavros_extras/from");
 		sp_nh.param("tf/rate_limit", tf_rate, 10.0);
 
 		ROS_INFO_NAMED("vision_pose", "Vision Pose Offsets (Roll, Pitch, Yaw) --- %.3lf, %.3lf, %.3lf",
@@ -91,7 +101,7 @@ public:
 			vision_cov_sub = sp_nh.subscribe("pose_cov", 10, &VisionPoseEstimatePlugin::vision_cov_cb, this);
 		}
 		service = sp_nh.advertiseService("set_param", &VisionPoseEstimatePlugin::param_callback, this);
-		// last_pose.setZero();
+		gcs_bridge_pub = sp_nh.advertise<mavros_msgs::Mavlink>(mavlink_out_topic, 10);
 		_cfg_f = boost::bind(&VisionPoseEstimatePlugin::cfgCallback, this, _1, _2);
 		_cfg_server.setCallback(_cfg_f);
 	}
@@ -105,15 +115,18 @@ private:
 	ros::Subscriber vision_sub;
 	ros::Subscriber vision_cov_sub;
 	ros::Publisher debug_pose_pub;
+	ros::Publisher gcs_bridge_pub;
 	ros::ServiceServer service;
-	dynamic_reconfigure::Server<mavros_extras::VisionEstimatePluginConfig> _cfg_server;
-	dynamic_reconfigure::Server<mavros_extras::VisionEstimatePluginConfig>::CallbackType _cfg_f;
+	dynamic_reconfigure::Server<mavros_extras::VisualOdometerInterfacePluginConfig> _cfg_server;
+	dynamic_reconfigure::Server<mavros_extras::VisualOdometerInterfacePluginConfig>::CallbackType _cfg_f;
 
 	bool px4_tf_rotate_;
 	bool apm_use_deltas_;
 	bool send_pose_estimate_;
-	bool enable_vision_pose_estimate_mavlink_ = true;
+	bool publish_to_gcs_ = true;
 	bool enable_vision_pose_delta_mavlink_ = true;
+	bool enable_vision_pose_estimate_mavlink_ = true;
+	bool enable_vision_velocities_mavlink_ = false;
 	bool check_pose_glitch_;
 	double dist_min_err_thresh_;
 	double dist_mid_err_thresh_;
@@ -130,6 +143,7 @@ private:
 	ros::Time last_transform_stamp;
 	Eigen::Affine3d last_pose;
 	Eigen::Vector3d prev_position;
+	Eigen::Vector3d prev_rpy;
 	Eigen::Matrix3d prev_rotation;
 	Eigen::Matrix3d prev_rotation_inverse;
 	bool last_pose_recvd = false;
@@ -213,6 +227,13 @@ private:
 			else this->enable_vision_pose_delta_mavlink_ = false;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", request.param_id.c_str(), (double) request.value == 1 ? "true" : "false");
 			response.success = true;
+		} else if( (request.param_id.compare("send_vision_velocities")) == 0 ){
+			double tmpFlag = (double) request.value;
+			if(tmpFlag == 0) this->enable_vision_pose_estimate_mavlink_ = false;
+			else if(tmpFlag == 1) this->enable_vision_pose_estimate_mavlink_ = true;
+			else this->enable_vision_pose_estimate_mavlink_ = false;
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", request.param_id.c_str(), (double) request.value == 1 ? "true" : "false");
+			response.success = true;
 		} else{
 			ROS_INFO_NAMED("vision_pose", "Requested parameter \'%s\' doesn't match any known parameters", request.param_id.c_str());
 			response.success = false;
@@ -220,13 +241,13 @@ private:
 		return true;
 	}
 
-	void cfgCallback(mavros_extras::VisionEstimatePluginConfig &config, uint32_t level){
-		if(config.check_pose_glitch != check_pose_glitch_){
-			check_pose_glitch_ = config.check_pose_glitch;
+	void cfgCallback(mavros_extras::VisualOdometerInterfacePluginConfig &config, uint32_t level){
+		if(config.do_pose_glitch_checking != check_pose_glitch_){
+			check_pose_glitch_ = config.do_pose_glitch_checking;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", "check_pose_glitch_", check_pose_glitch_ ? "true" : "false");
 		}
-		if(config.publish_pose_estimate != send_pose_estimate_){
-			send_pose_estimate_ = config.publish_pose_estimate;
+		if(config.publish_debug_pose_estimate != send_pose_estimate_){
+			send_pose_estimate_ = config.publish_debug_pose_estimate;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", "send_pose_estimate_", send_pose_estimate_ ? "true" : "false");
 		}
 		if(config.send_vision_pose_delta != enable_vision_pose_delta_mavlink_){
@@ -236,6 +257,14 @@ private:
 		if(config.send_vision_pose_estimate != enable_vision_pose_estimate_mavlink_){
 			enable_vision_pose_estimate_mavlink_ = config.send_vision_pose_estimate;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", "enable_vision_pose_estimate_mavlink_", enable_vision_pose_estimate_mavlink_ ? "true" : "false");
+		}
+		// if(config.publish_to_gcs != publish_to_gcs_){
+		// 	publish_to_gcs_ = config.publish_to_gcs;
+		// 	ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", "publish_to_gcs_", publish_to_gcs_ ? "true" : "false");
+		// }
+		if(config.send_vision_velocities != enable_vision_velocities_mavlink_){
+			enable_vision_velocities_mavlink_ = config.send_vision_velocities;
+			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %s", "enable_vision_velocities_mavlink_", enable_vision_velocities_mavlink_ ? "true" : "false");
 		}
 		if(config.good_health_thresh != good_health_thresh_){
 			good_health_thresh_ = config.good_health_thresh;
@@ -261,16 +290,16 @@ private:
 			mid_glitch_confidence_ = config.mid_glitch_confidence;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", "mid_glitch_confidence_", mid_glitch_confidence_);
 		}
-		if(config.dist_min_err_thresh != dist_min_err_thresh_){
-			dist_min_err_thresh_ = config.dist_min_err_thresh;
+		if(config.glitch_dist_thresh_min_err != dist_min_err_thresh_){
+			dist_min_err_thresh_ = config.glitch_dist_thresh_min_err;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", "dist_min_err_thresh_", dist_min_err_thresh_);
 		}
-		if(config.dist_mid_err_thresh != dist_mid_err_thresh_){
-			dist_mid_err_thresh_ = config.dist_mid_err_thresh;
+		if(config.glitch_dist_thresh_mid_err != dist_mid_err_thresh_){
+			dist_mid_err_thresh_ = config.glitch_dist_thresh_mid_err;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", "dist_mid_err_thresh_", dist_mid_err_thresh_);
 		}
-		if(config.dist_max_err_thresh != dist_max_err_thresh_){
-			dist_max_err_thresh_ = config.dist_max_err_thresh;
+		if(config.glitch_dist_thresh_max_err != dist_max_err_thresh_){
+			dist_max_err_thresh_ = config.glitch_dist_thresh_max_err;
 			ROS_INFO_NAMED("vision_pose", "Setting parameter \'%s\' to %.1f", "dist_max_err_thresh_", dist_max_err_thresh_);
 		}
 
@@ -381,6 +410,7 @@ private:
 			if(!last_pose_recvd){
 				prev_position = position;
 				prev_rotation = cur_rotation;
+				prev_rpy = rpy;
 				prev_rotation_inverse = prev_rotation.inverse();
 				last_pose_recvd = true;
 				ROS_DEBUG_THROTTLE_NAMED(10, "vision_pose", "Vision: Same Pose as last one, dropped.");
@@ -397,6 +427,7 @@ private:
 			Eigen::Matrix3d delta_rot = prev_rotation_inverse * cur_rotation;
 			Eigen::Vector3d delta_rpy = ftf::quaternion_to_rpy(Eigen::Quaterniond(delta_rot));
 
+			prev_rpy = rpy;
 			prev_position = position;
 			prev_rotation = cur_rotation;
 			prev_rotation_inverse = prev_rotation.inverse();
@@ -467,8 +498,26 @@ private:
 
 			// just the URT of the 6x6 Pose Covariance Matrix, given
 			// that the matrix is symmetric
-			if(enable_vision_pose_delta_mavlink_) UAS_FCU(m_uas)->send_message_ignore_drop(vp);
-			// ROS_DEBUG_STREAM_NAMED("vision_pose", "VISION_POSITION_DELTA Msg sent! " << std::endl);
+			if(enable_vision_pose_delta_mavlink_) {
+				UAS_FCU(m_uas)->send_message_ignore_drop(vp);
+				// ROS_DEBUG_STREAM_NAMED("vision_pose", "VISION_POSITION_DELTA Msg sent! " << std::endl);
+				if(publish_to_gcs_){
+					// const mavlink_message_t* vpMsg;
+					// mavlink::MsgMap map(vpMsg);
+
+					mavlink_message_t vpMsg{};
+					mavlink::MsgMap map(vpMsg);
+					// mavros_msgs::Mavlink* mavMsg;
+					auto mavMsg = boost::make_shared<mavros_msgs::Mavlink>();
+					vp.serialize(map);
+					// mavlink::mavlink_finalize_message(vpMsg, UAS_FCU(m_uas)->get_system_id(), UAS_FCU(m_uas)->get_component_id(), vp.MIN_LENGTH, vp.LENGTH, vp.CRC_EXTRA);
+
+					mavMsg->header.stamp = stamp;
+					mavros_msgs::mavlink::convert(vpMsg, *mavMsg);
+					gcs_bridge_pub.publish(mavMsg);
+					ROS_DEBUG_NAMED("vision_pose", "Sent VISION_POSITION_DELTA Msg to GCS Bridge.");
+				}
+			}
 
 			if(enable_vision_pose_estimate_mavlink_){
 				mavlink::common::msg::VISION_POSITION_ESTIMATE vpp{};
@@ -481,18 +530,36 @@ private:
 				vpp.pitch = rpy.y();
 				vpp.yaw = rpy.z();
 				ftf::covariance_urt_to_mavlink(cov_map, vpp.covariance);
-
+				// UAS_FCU(m_uas)->send_message_ignore_drop(vpp);
 
 				if(std::fabs(dx) >= dist_max_err_thresh_){
 					ROS_WARN_NAMED("vision_pose", "Vision Pose Estimate Major Glitch Detected --> Using previous pose");
 					ROS_WARN_NAMED("vision_pose", " --- Glitch Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+					prev_vpp.usec = (uint64_t) (stamp.toNSec() / 1000);
 					UAS_FCU(m_uas)->send_message_ignore_drop(prev_vpp);
 					ROS_DEBUG_NAMED("vision_pose", "VISION_POSITION_ESTIMATE Msg sent! ");
+					// if(publish_to_gcs_){
+					// 	// auto mavMsg = boost::make_shared<mavros_msgs::Mavlink>();
+					// 	mavros_msgs::Mavlink mavMsg;
+					// 	mavMsg.header.stamp = stamp;
+					// 	mavros_msgs::mavlink::convert(&prev_vpp, &mavMsg);
+					// 	gcs_bridge_pub.publish(mavMsg);
+					// 	ROS_DEBUG_NAMED("vision_pose", "Sent VISION_POSITION_ESTIMATE Msg to GCS Bridge.");
+					// }
 				} else if( (std::fabs(dx) >= dist_mid_err_thresh_) && (std::fabs(dx) < dist_max_err_thresh_) ){
 					ROS_WARN_NAMED("vision_pose", "Vision Pose Estimate Medium Glitch --> Using previous pose");
 					ROS_WARN_NAMED("vision_pose", " --- Glitch Pose Error (%.5lf) -- dX, dY = %.4lf, %.4lf", distErrMetric, dx, dy);
+					prev_vpp.usec = (uint64_t) (stamp.toNSec() / 1000);
 					UAS_FCU(m_uas)->send_message_ignore_drop(prev_vpp);
 					ROS_DEBUG_NAMED("vision_pose", "VISION_POSITION_ESTIMATE Msg sent! ");
+					// if(publish_to_gcs_){
+					// 	// auto mavMsg = boost::make_shared<mavros_msgs::Mavlink>();
+					// 	mavros_msgs::Mavlink mavMsg;
+					// 	mavMsg.header.stamp = stamp;
+					// 	mavros_msgs::mavlink::convert(&prev_vpp, &mavMsg);
+					// 	gcs_bridge_pub.publish(mavMsg);
+					// 	ROS_DEBUG_NAMED("vision_pose", "Sent VISION_POSITION_ESTIMATE Msg to GCS Bridge.");
+					// }
 				} else{
 					ROS_DEBUG_NAMED("vision_pose", "Vision Pose Estimate (Time, X, Y, Z, R, P, Y) --- %d, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
 						(int) vpp.usec, vpp.x, vpp.y, vpp.z, vpp.roll, vpp.pitch, vpp.yaw
@@ -500,6 +567,14 @@ private:
 					UAS_FCU(m_uas)->send_message_ignore_drop(vpp);
 					prev_vpp = vpp;
 					ROS_DEBUG_NAMED("vision_pose", "VISION_POSITION_ESTIMATE Msg sent! ");
+					// if(publish_to_gcs_){
+					// 	// auto mavMsg = boost::make_shared<mavros_msgs::Mavlink>();
+					// 	mavros_msgs::Mavlink mavMsg;
+					// 	mavMsg.header.stamp = stamp;
+					// 	mavros_msgs::mavlink::convert(&vpp, &mavMsg);
+					// 	gcs_bridge_pub.publish(mavMsg);
+					// 	ROS_DEBUG_NAMED("vision_pose", "Sent VISION_POSITION_ESTIMATE Msg to GCS Bridge.");
+					// }
 				}
 			}
 

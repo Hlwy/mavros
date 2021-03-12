@@ -135,38 +135,20 @@ odometry:
   estimator_type: 3 # check enum MAV_ESTIMATOR_TYPE in <https://mavlink.io/en/messages/common.html>
 
 # vision_pose_estimate
-vision_pose:
-  px4_tf_rotate: false
-  apm_use_delta: true
-  send_pose_estimate: true
-  check_pose_glitch: true
-  dist_min_err_thresh: 0.05
-  dist_mid_err_thresh: 0.1
-  dist_max_err_thresh: 0.5
-  good_health_thresh: 0.001
-  bad_health_thresh: 1000.0
-  default_confidence: 50.0
-  max_confidence: 95.0
-  min_glitch_confidence: 80.0
-  mid_glitch_confidence: 60.0
-  offsets:
-    roll: 0.0
-    pitch: 0.0
-    yaw: 0.0
-  tf:
-    listen: false           # enable tf listener (disable topic subscribers)
-    send: false # a
-    frame_id: "odom_ned"
-    child_frame_id: "base_link"
-    rate_limit: 10.0
-
-# vision_pose_delta
-# vision_delta:
+# vision_pose:
 #   px4_tf_rotate: false
 #   apm_use_delta: true
+#   send_pose_estimate: true
+#   check_pose_glitch: true
+#   dist_min_err_thresh: 0.05
+#   dist_mid_err_thresh: 0.1
+#   dist_max_err_thresh: 0.5
 #   good_health_thresh: 0.001
 #   bad_health_thresh: 1000.0
 #   default_confidence: 50.0
+#   max_confidence: 95.0
+#   min_glitch_confidence: 80.0
+#   mid_glitch_confidence: 60.0
 #   offsets:
 #     roll: 0.0
 #     pitch: 0.0
@@ -174,9 +156,15 @@ vision_pose:
 #   tf:
 #     listen: false           # enable tf listener (disable topic subscribers)
 #     send: false # a
-#     frame_id: "odom"
+#     frame_id: "odom_ned"
 #     child_frame_id: "base_link"
 #     rate_limit: 10.0
+
+# visual_odometer_interface
+visual_odometer:
+  tf:
+    frame_id: "odom_ned"
+    child_frame_id: "base_link"
 
 # vision_speed_estimate
 vision_speed:

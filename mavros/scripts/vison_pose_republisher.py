@@ -77,6 +77,7 @@ class mavros_vision_pose_republisher:
 
     allow_msg_pub = False
     use_vo_estimate = True
+    # send_vo_spd_estimates = True
     recvd_initial_pose = False
     rtabResetId = 'rtabmap/reset_odom'
     rtabResetPoseId = 'rtabmap/reset_odom_to_pose'
@@ -110,8 +111,10 @@ class mavros_vision_pose_republisher:
         vo_topic = rospy.get_param('~vo_topic', "/vo")
         lsm_topic = rospy.get_param('~lsm_topic', "lsm/corrected_pose")
         pose_topic = rospy.get_param('~pose_topic', "mavros/local_position/pose")
-        output_topic = rospy.get_param('~output_topic', "mavros/vision_pose/pose_cov")
-        speed_topic = rospy.get_param('~speed_topic', "mavros/vision_speed/speed_twist_cov")
+        # output_topic = rospy.get_param('~output_topic', "mavros/vision_pose/pose_cov")
+        # speed_topic = rospy.get_param('~speed_topic', "mavros/vision_speed/speed_twist_cov")
+        output_topic = rospy.get_param('~output_topic', "mavros/visual_odometer/pose_cov")
+        speed_topic = rospy.get_param('~speed_topic', "mavros/visual_odometer/speed_twist_cov")
         rospy.Subscriber(vo_topic, Odometry, self.voCallback)
         rospy.Subscriber(lsm_topic, PoseStamped, self.lsmCallback)
         rospy.Subscriber(pose_topic, PoseStamped, self.poseCallback)
@@ -122,6 +125,7 @@ class mavros_vision_pose_republisher:
         self.reset_srv = rospy.Service("vision_pose_republisher/reset", Empty, self.reset_vo)
         self.vo_input_srv = rospy.Service("vision_pose_republisher/use_vo", Empty, self.switch_vo)
         self.lsm_input_srv = rospy.Service("vision_pose_republisher/use_lsm", Empty, self.switch_lsm)
+        # self.vo_spd_toggle_srv = rospy.Service("vision_pose_republisher/toggle_viso_spd_mavlink_publishing", Empty, self.switch_viso_spd_publishing)
         self.r = rospy.Rate(update_rate)
 
         if(self.use_vo_estimate): callRosService(self.rtabResetId, None)
@@ -153,6 +157,11 @@ class mavros_vision_pose_republisher:
     def switch_lsm(self, req):
         rospy.loginfo("mavros_vision_pose_republisher --- Switching Mavros EKF Ext. Nav Source to LSM.")
         self.use_vo_estimate = False
+        return []
+    def switch_viso_spd_publishing(self, req):
+        self.send_vo_spd_estimates = (not self.send_vo_spd_estimates)
+        if(self.send_vo_spd_estimates): rospy.loginfo("mavros_vision_pose_republisher --- VISION_SPEED_ESTIMATE Mavlink Publishing Enabled.")
+        else: rospy.loginfo("mavros_vision_pose_republisher --- VISION_SPEED_ESTIMATE Mavlink Publishing Disabled.")
         return []
 
     def poseCallback(self, msg):
@@ -211,6 +220,7 @@ class mavros_vision_pose_republisher:
             outMsg.pose.covariance = msg.pose.covariance
             self.out_pub.publish(outMsg)
             self.speed_pub.publish(spdMsg)
+            # if(self.send_vo_spd_estimates): self.speed_pub.publish(spdMsg)
 
     def lsmCallback(self, msg):
         poseIn = msg.pose

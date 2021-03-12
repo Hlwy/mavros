@@ -89,6 +89,7 @@ add_library(mavros_extras
   src/plugins/vision_pose_estimate.cpp
   src/plugins/vision_pose_delta.cpp
   src/plugins/vision_speed_estimate.cpp
+  src/plugins/visual_odometer_interface.cpp
   src/plugins/wheel_odometry.cpp
   src/plugins/wheel_encoders.cpp
   src/plugins/wheel_encoders_data.cpp
